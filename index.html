@@ -21,6 +21,19 @@
   nav{display:flex; gap:6px; background:var(--card); padding:6px; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:18px; flex-wrap:wrap;}
   nav button{flex:1; min-width:100px; padding:10px 10px; border:none; background:transparent; border-radius:8px; cursor:pointer; font-size:13px; color:var(--muted); font-weight:600;}
   nav button.active{background:var(--primary); color:#fff;}
+  /* ---- Left sidebar menu (bade screen par) / sticky top bar (chhote screen par) ---- */
+  @media (min-width: 900px){
+    .wrap{max-width:1180px; margin:0 auto 0 214px;}
+    nav{position:fixed; left:12px; top:12px; bottom:12px; width:190px; flex-direction:column; flex-wrap:nowrap; gap:4px; overflow-y:auto; margin:0; padding:10px 8px; z-index:50; border:1px solid var(--border);}
+    nav::before{content:'📚 Menu'; display:block; font-size:12px; font-weight:700; color:var(--primary-dark); letter-spacing:.5px; padding:4px 10px 8px; text-transform:uppercase;}
+    nav button{flex:none; width:100%; min-width:0; text-align:left; padding:11px 12px; font-size:13.5px; border-left:3px solid transparent;}
+    nav button:hover{background:#f0fdf4; color:var(--primary-dark);}
+    nav button.active{border-left-color:#bbf7d0;}
+  }
+  @media (max-width: 899px){
+    nav{position:sticky; top:0; z-index:40; flex-wrap:nowrap; overflow-x:auto; margin-bottom:14px;}
+    nav button{flex:0 0 auto; white-space:nowrap; min-width:0;}
+  }
   .card{background:var(--card); border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:16px;}
   .card h2{margin-top:0; font-size:17px; color:var(--primary-dark);}
   .card h3{font-size:15px; color:var(--primary-dark); margin-bottom:10px;}
