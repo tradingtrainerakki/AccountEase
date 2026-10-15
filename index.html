@@ -30,6 +30,11 @@
     nav button:hover{background:#f0fdf4; color:var(--primary-dark);}
     nav button.active{border-left-color:#bbf7d0;}
   }
+  .kbd{display:inline-block; min-width:18px; padding:0 5px; margin-left:6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:5px; background:#fff; color:#0b5539; font:700 11px/16px 'Courier New',monospace; text-align:center; float:right;}
+  nav button.active .kbd{background:#ffffff33; color:#fff; border-color:#ffffff66;}
+  #kbdPill{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:9px 16px; border-radius:30px; font-size:13px; z-index:9500; display:none; box-shadow:0 4px 16px rgba(0,0,0,.35);}
+  #vchKeyHint{font-size:12px; color:var(--muted); margin:-4px 0 10px;}
+  @media (max-width: 899px){ .kbd, #vchKeyHint{display:none;} }
   @media (max-width: 899px){
     nav{position:sticky; top:0; z-index:40; flex-wrap:nowrap; overflow-x:auto; margin-bottom:14px;}
     nav button{flex:0 0 auto; white-space:nowrap; min-width:0;}
@@ -4265,6 +4270,130 @@ function initEntityUI(){
   renderEntityBar();
   document.title = ACTIVE.name + ' — Accounts';
 }
+
+// ===================== Keyboard shortcuts (Tally jaisa) =====================
+const KB_TABS = { v:'voucher', t:'transactions', l:'ledger', g:'groups', s:'statement', a:'accounts', r:'receipts', i:'inventory', p:'report', c:'reconcile' };
+const KB_VTYPES = { p:'payment', r:'receipt', c:'contra', j:'journal', s:'sales', u:'purchase', n:'credit_note', d:'debit_note' };
+let kbMenuMode = false, kbPillTimer = null;
+function kbIsTyping(el){
+  if(!el) return false;
+  if(el.isContentEditable) return true;
+  const t = el.tagName;
+  if(t === 'TEXTAREA' || t === 'SELECT') return true;
+  if(t === 'INPUT') return !['checkbox','radio','button','submit','range','color','file'].includes((el.type||'').toLowerCase());
+  return false;
+}
+function kbVisible(el){
+  for(let e = el; e && e !== document.body; e = e.parentElement){ if(getComputedStyle(e).display === 'none') return false; }
+  return true;
+}
+function kbOverlayOpen(){
+  return ['loginOverlay','entityModal','teamModal','noEntityBox','kbdHelp'].some(id=>{ const el = document.getElementById(id); return el && (el.style.display === 'flex' || el.style.display === 'block'); });
+}
+function kbPill(msg, ms){
+  const pill = document.getElementById('kbdPill'); if(!pill) return;
+  clearTimeout(kbPillTimer);
+  if(!msg){ pill.style.display = 'none'; return; }
+  pill.textContent = msg; pill.style.display = 'block';
+  if(ms) kbPillTimer = setTimeout(()=>{ pill.style.display = 'none'; }, ms);
+}
+function kbCurrentTab(){ const b = document.querySelector('nav button.active'); return b ? b.dataset.tab : ''; }
+function kbGoTab(tab){
+  const b = document.querySelector('nav button[data-tab="' + tab + '"]'); if(b) b.click();
+  kbMenuMode = false; kbPill('');
+  if(document.activeElement && document.activeElement.blur && !kbIsTyping(document.activeElement)) document.activeElement.blur();
+}
+function kbPickVoucherType(type){
+  if(editingMultiId){ toast('Edit chal raha hai — pehle "Edit radd karein" dabayein'); return; }
+  const sel = document.getElementById('voucherType'); if(!sel) return;
+  sel.value = type; onVoucherTypeChange();
+  let first = null;
+  if(vchMulti){ first = document.querySelector('#multiLinesWrap input[list]'); }
+  else { const sp = document.getElementById('singlePair'); first = sp ? [...sp.querySelectorAll('input, select')].find(kbVisible) : null; }
+  if(first){ first.focus(); if(first.select) first.select(); }
+  kbPill('⌨️ ' + (VOUCHER_LABELS[type] || type) + ' — Enter = agla khana, Ctrl+S = Save', 3500);
+}
+function kbEnterNext(target){
+  const scope = document.getElementById('tab-voucher'); if(!scope || !scope.contains(target)) return false;
+  const list = [...scope.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([disabled]), select:not([disabled]), textarea:not([disabled])')].filter(kbVisible);
+  const i = list.indexOf(target); if(i < 0 || i >= list.length - 1) return false;
+  const nx = list[i+1]; nx.focus(); if(nx.select && nx.tagName === 'INPUT') nx.select();
+  return true;
+}
+function kbToggleHelp(show){
+  let h = document.getElementById('kbdHelp');
+  if(!h){
+    h = document.createElement('div'); h.id = 'kbdHelp';
+    h.style.cssText = 'display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9990; align-items:center; justify-content:center;';
+    h.onclick = ()=> kbToggleHelp(false);
+    h.innerHTML = `<div style="background:#fff; border-radius:14px; padding:22px 26px; width:min(620px,94vw); max-height:88vh; overflow:auto;" onclick="event.stopPropagation()">
+      <h3 style="margin:0 0 10px; color:#0b5539;">⌨️ Keyboard Shortcuts</h3>
+      <div style="font-size:13px; color:#374151; line-height:1.9;">
+        <b>Menu (jab cursor kisi khane me na ho):</b><br>
+        <span class="kbd" style="float:none;">V</span> Voucher Entry &nbsp; <span class="kbd" style="float:none;">T</span> Transactions &nbsp; <span class="kbd" style="float:none;">L</span> Ledger by Head &nbsp; <span class="kbd" style="float:none;">G</span> Groups &nbsp; <span class="kbd" style="float:none;">S</span> Statement<br>
+        <span class="kbd" style="float:none;">A</span> Account Management &nbsp; <span class="kbd" style="float:none;">R</span> Receipts &nbsp; <span class="kbd" style="float:none;">I</span> Inventory &nbsp; <span class="kbd" style="float:none;">P</span> Report &nbsp; <span class="kbd" style="float:none;">C</span> Reconciliation<br>
+        <b style="display:block; margin-top:8px;">Voucher Entry page par (type chunne ke liye):</b>
+        <span class="kbd" style="float:none;">P</span> Payment &nbsp; <span class="kbd" style="float:none;">R</span> Receipt &nbsp; <span class="kbd" style="float:none;">C</span> Contra &nbsp; <span class="kbd" style="float:none;">J</span> Journal<br>
+        <span class="kbd" style="float:none;">S</span> Sales &nbsp; <span class="kbd" style="float:none;">U</span> Purchase &nbsp; <span class="kbd" style="float:none;">N</span> Credit Note &nbsp; <span class="kbd" style="float:none;">D</span> Debit Note<br>
+        <b style="display:block; margin-top:8px;">Voucher bharte samay:</b>
+        <span class="kbd" style="float:none;">Enter</span> agla khana &nbsp; <span class="kbd" style="float:none;">Ctrl</span>+<span class="kbd" style="float:none;">S</span> Save<br>
+        <span class="kbd" style="float:none;">Esc</span> khane se bahar aana. Voucher page par, khane se bahar Esc dabane se <b>Menu mode</b> (phir V/T/L... se dusre page par jayein).<br>
+        <span class="kbd" style="float:none;">?</span> yeh list
+      </div>
+      <div style="text-align:right; margin-top:12px;"><button class="btn-secondary btn-small" onclick="kbToggleHelp(false)">Band karein (Esc)</button></div></div>`;
+    document.body.appendChild(h);
+  }
+  h.style.display = show ? 'flex' : 'none';
+}
+document.addEventListener('keydown', async (e)=>{
+  if(e.isComposing) return;
+  const key = (e.key || '');
+  const target = e.target;
+  const helpOpen = document.getElementById('kbdHelp') && document.getElementById('kbdHelp').style.display === 'flex';
+  if(helpOpen){ if(key === 'Escape' || key === '?'){ kbToggleHelp(false); e.preventDefault(); } return; }
+  if(kbOverlayOpen()) return;
+  const onVoucher = kbCurrentTab() === 'voucher';
+
+  // Ctrl+S = Save (sirf Voucher page par)
+  if((e.ctrlKey || e.metaKey) && key.toLowerCase() === 's'){
+    if(onVoucher){ e.preventDefault(); await saveVoucher(false); if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); kbPill('⌨️ Voucher type chunein: P R C J S U N D', 4000); }
+    return;
+  }
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+
+  if(key === 'Escape'){
+    if(kbIsTyping(target)){ target.blur(); kbPill(onVoucher ? '⌨️ Type: P R C J S U N D  ·  Menu ke liye dubara Esc' : '⌨️ Menu: V T L G S A R I P C', 4000); return; }
+    kbMenuMode = true; kbPill('⌨️ Menu mode — V Voucher · T Transactions · L Ledger · G Groups · S Statement · A Accounts · R Receipts · I Inventory · P Report · C Reconcile');
+    return;
+  }
+  if(key === 'Enter' && onVoucher && target && target.tagName === 'INPUT' && kbIsTyping(target)){
+    if(kbEnterNext(target)) e.preventDefault();
+    return;
+  }
+  if(kbIsTyping(target)) return;
+  if(key === '?'){ e.preventDefault(); kbToggleHelp(true); return; }
+  if(key.length !== 1 || !/[a-z]/i.test(key)) return;
+  const k = key.toLowerCase();
+  if(onVoucher && !kbMenuMode){
+    if(KB_VTYPES[k]){ e.preventDefault(); kbPickVoucherType(KB_VTYPES[k]); }
+    return;
+  }
+  if(KB_TABS[k]){ e.preventDefault(); kbGoTab(KB_TABS[k]); if(KB_TABS[k] === 'voucher'){ kbPill('⌨️ Voucher type chunein: P R C J S U N D', 4000); } }
+});
+(function initKeyboardUI(){
+  const pill = document.createElement('div'); pill.id = 'kbdPill'; document.body.appendChild(pill);
+  const letterOf = {}; Object.keys(KB_TABS).forEach(k=> letterOf[KB_TABS[k]] = k.toUpperCase());
+  document.querySelectorAll('nav button').forEach(b=>{
+    const L = letterOf[b.dataset.tab]; if(!L) return;
+    const sp = document.createElement('span'); sp.className = 'kbd'; sp.textContent = L; b.appendChild(sp);
+  });
+  const anchor = document.getElementById('multiEditBanner');
+  if(anchor){
+    const d = document.createElement('div'); d.id = 'vchKeyHint';
+    d.innerHTML = '⌨️ Keys: <b>P</b> Payment · <b>R</b> Receipt · <b>C</b> Contra · <b>J</b> Journal · <b>S</b> Sales · <b>U</b> Purchase · <b>N</b> Credit Note · <b>D</b> Debit Note &nbsp;|&nbsp; Enter = agla khana · Ctrl+S = Save · Esc = Menu · ? = Help';
+    anchor.parentNode.insertBefore(d, anchor);
+  }
+})();
 
 boot();
 </script>
