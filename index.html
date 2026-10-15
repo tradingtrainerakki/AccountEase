@@ -398,7 +398,18 @@
   <div id="tab-transactions" class="tab-content" style="display:none;">
     <div class="card">
       <h2>All Vouchers</h2>
-      <div class="filter-bar">
+      <div class="filter-bar" style="flex-wrap:wrap; gap:10px 14px;">
+        <label style="display:flex; align-items:center; gap:6px;">📅 From:
+          <input type="date" id="txFrom" onchange="renderTransactions()" style="width:auto; padding:4px 8px; font-size:12px;" /></label>
+        <label style="display:flex; align-items:center; gap:6px;">To:
+          <input type="date" id="txTo" onchange="renderTransactions()" style="width:auto; padding:4px 8px; font-size:12px;" /></label>
+        <span style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn-secondary btn-small" onclick="setTxRange('today')">Aaj</button>
+          <button class="btn-secondary btn-small" onclick="setTxRange('month')">Is mahina</button>
+          <button class="btn-secondary btn-small" onclick="setTxRange('lastmonth')">Pichla mahina</button>
+          <button class="btn-secondary btn-small" onclick="setTxRange('fy')">Is vittiya varsh</button>
+          <button class="btn-secondary btn-small" onclick="setTxRange('all')">Sab</button>
+        </span>
         <label><input type="checkbox" id="showCancelledToggle" onchange="renderTransactions()" /> Show Cancelled</label>
         <label style="margin-left:auto;">
           Voucher Type:
@@ -2370,6 +2381,16 @@ function renderGroupsTab(){
   document.getElementById('groupSummaryWrap').innerHTML = sections || '<div class="empty">No groups yet</div>';
 }
 
+function ymdLocal(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function setTxRange(kind){
+  const now = new Date(); let from = '', to = '';
+  if(kind === 'today'){ from = to = ymdLocal(now); }
+  else if(kind === 'month'){ from = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)); to = ymdLocal(new Date(now.getFullYear(), now.getMonth()+1, 0)); }
+  else if(kind === 'lastmonth'){ from = ymdLocal(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 0)); }
+  else if(kind === 'fy'){ const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1; from = y + '-04-01'; to = (y+1) + '-03-31'; }
+  document.getElementById('txFrom').value = from; document.getElementById('txTo').value = to;
+  renderTransactions();
+}
 function renderTransactions(){
   const wrap = document.getElementById('transactionsTableWrap');
   const showCancelled = document.getElementById('showCancelledToggle')?.checked || false;
@@ -2378,8 +2399,13 @@ function renderTransactions(){
   let filtered = [...vouchers];
   if(!showCancelled) filtered = filtered.filter(v=> !v.cancelled);
   if(filterType !== '__all__') filtered = filtered.filter(v=> v.voucherType === filterType);
+  const txFrom = document.getElementById('txFrom')?.value || '', txTo = document.getElementById('txTo')?.value || '';
+  if(txFrom) filtered = filtered.filter(v=> v.date >= txFrom);
+  if(txTo) filtered = filtered.filter(v=> v.date <= txTo);
   filtered.sort((a,b)=> new Date(b.date)-new Date(a.date));
-  if(filtered.length===0){ wrap.innerHTML = '<div class="empty">No match</div>'; return; }
+  if(filtered.length===0){ wrap.innerHTML = '<div class="empty">Is avadhi / filter me koi voucher nahi mila</div>'; return; }
+  const activeTotal = filtered.filter(v=>!v.cancelled).reduce((t,v)=> t + (Number(v.amount)||0), 0);
+  const infoLine = `<div style="font-size:12px; color:var(--muted); margin:0 0 8px;">${(txFrom||txTo) ? '📅 ' + (txFrom||'shuru') + ' se ' + (txTo||'aaj tak') + ' — ' : ''}<b>${filtered.length}</b> voucher${filtered.some(v=>v.cancelled)?' (cancelled samet)':''} &nbsp;|&nbsp; Kul raqam (active): <b>₹${fmtPlain(activeTotal)}</b></div>`;
   let rows = filtered.map(v=>{
     if(editingVoucherId === v.id){
       return `<tr style="background:#fffbea;">
@@ -2422,7 +2448,7 @@ function renderTransactions(){
       <td class="actions-cell" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">${actions}</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<table><thead><tr>
+  wrap.innerHTML = infoLine + `<table><thead><tr>
       <th style="text-align:left;">Date</th><th style="text-align:left;">Voucher</th>
       <th style="text-align:left; background:#fdecea; color:#991b1b;">Dr Ledger</th>
       <th style="text-align:left; background:#dcfce7; color:#166534;">Cr Ledger</th>
