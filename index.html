@@ -483,7 +483,7 @@
           <select id="stmtType" onchange="onStmtTypeChange()"><option value="ledger">Ledger</option><option value="group">Group</option></select></div>
         <div class="field"><label id="stmtSelLabel">Select Ledger</label><select id="stmtSelect" onchange="renderStatement()"></select></div>
         <div class="field"><label>View</label>
-          <select id="stmtView" onchange="renderStatement()"><option value="detail">Entry-wise (detailed)</option><option value="daily">Date-wise (daily total)</option></select></div>
+          <select id="stmtView" onchange="renderStatement()"><option value="detail">Entry-wise (detailed)</option><option value="daily">Date-wise (daily total)</option><option value="summary">Ledger-wise summary only (sirf total)</option></select></div>
       </div>
       <div class="grid3">
         <div class="field"><label>From Date</label><input type="date" id="stmtFrom" onchange="renderStatement()" /></div>
@@ -4155,7 +4155,7 @@ function renderStatement(){
   let html = `<h3 style="margin:14px 0 4px;">${isGroup ? 'Group' : 'Ledger'} Statement — ${escapeHtml(sel)}</h3>
     <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Period: ${period}${act ? ' • Activity: ' + (act === '__none__' ? '(No activity)' : escapeHtml(act)) : ''}${multi ? ' • Ledgers: ' + names.length : ''}</div>`;
   const excel = [];
-  if(multi){
+  if(multi || view === 'summary'){
     if(!names.length){ wrap.innerHTML = html + '<div class="empty">इस group में कोई ledger नहीं है</div>'; stmtLast = null; return; }
     let sRows = '';
     excel.push(['Ledger','Opening','Debit','Credit','Closing']);
@@ -4167,6 +4167,12 @@ function renderStatement(){
     sRows += `<tr class="ledger-total-row"><td style="${L}">${isGroup ? 'Group Total' : 'Total (सब मिलाकर)'}</td><td>${stmtBal(d.opening)}</td><td>${fmtPlain(d.totDr)}</td><td>${fmtPlain(d.totCr)}</td><td>${stmtBal(d.closing)}</td></tr>`;
     html += `<table class="ledger-table" style="margin-bottom:18px;"><thead><tr><th style="${L}">Ledger</th><th>Opening</th><th>Debit</th><th>Credit</th><th>Closing</th></tr></thead><tbody>${sRows}</tbody></table>`;
     excel.push([]);
+    if(view === 'summary'){
+      html += `<div style="font-size:12px; color:var(--muted);">Sirf ledger-wise total dikhaye gaye hain (entries nahi).</div>`;
+      wrap.innerHTML = html;
+      stmtLast = { title: sel, isGroup, excel };
+      return;
+    }
   }
   const aggr = {};
   const selKey = act === '__none__' ? '(No activity)' : act;
