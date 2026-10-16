@@ -193,6 +193,23 @@
   .bs-table tr.bs-leaf td.amt{font-weight:500;}
   .bs-table tr.bs-g:hover td, .bs-table tr.bs-sg:hover td{background:#dcfce7;}
   .bs-arrow{display:inline-block; width:14px; font-size:11px; color:#0f6e4e;}
+  .tl-head{margin:4px 0 10px;}
+  .tl-name{font-size:17px; font-weight:700; color:#0b5539;}
+  .tl-meta{font-size:12px; color:#6b7280; margin-top:2px;}
+  .tl-table{width:100%; border-collapse:collapse; font-size:13px; border-top:2px solid #0f6e4e; border-bottom:2px solid #0f6e4e;}
+  .tl-table th{padding:8px 8px; text-align:left; font-weight:700; border-bottom:1px solid #0f6e4e; background:#f8faf9; font-size:12px; text-transform:none;}
+  .tl-table th.r, .tl-table td.r{text-align:right;}
+  .tl-table td{padding:6px 8px; border-bottom:1px solid #eef2f0; vertical-align:top;}
+  .tl-table td.amt{text-align:right; font-family:'Courier New',monospace; white-space:nowrap;}
+  .tl-cp{font-weight:600;}
+  .tl-narr{font-size:11.5px; color:#6b7280; font-style:italic; margin-top:1px;}
+  .tl-sub{display:flex; justify-content:space-between; gap:12px; font-size:12px; font-weight:400; color:#374151; padding-left:14px; max-width:320px;}
+  .tl-dc{font-size:10.5px; color:#6b7280; margin-left:4px; font-family:'Segoe UI',Arial,sans-serif;}
+  .tl-table tr.tl-open td, .tl-table tr.tl-close td{font-weight:700;}
+  .tl-table tr.tl-cur td{font-weight:600; border-top:1px solid #cbd5d0; background:#fbfdfc;}
+  .tl-table tr.tl-total td{font-weight:800; border-top:2px solid #0f6e4e; border-bottom:none; background:#f0fdf4;}
+  .bs-link{cursor:pointer; color:inherit; border-bottom:1px dotted #94a3b8;}
+  .bs-link:hover{color:#0f6e4e; border-bottom-color:#0f6e4e;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.79.0/dist/umd/supabase.js"></script>
@@ -433,12 +450,19 @@
 
   <div id="tab-ledger" class="tab-content" style="display:none;">
     <div class="card">
-      <h2>Ledger by Head</h2>
-      <div class="field" style="max-width:320px;">
-        <label>Select Name</label>
-        <select id="ledgerHeadSelect" onchange="renderLedgerDetail()"></select>
+      <h2>Ledger by Head <button id="ledBackBtn" class="btn-secondary btn-small" style="display:none; margin-left:12px;" onclick="ledgerBack()">← Report par wapas</button></h2>
+      <div class="grid3">
+        <div class="field"><label>Select Ledger</label><select id="ledgerHeadSelect" onchange="renderLedgerDetail()"></select></div>
+        <div class="field"><label>From Date</label><input type="date" id="ledFrom" onchange="renderLedgerDetail()" /></div>
+        <div class="field"><label>To Date</label><input type="date" id="ledTo" onchange="renderLedgerDetail()" /></div>
       </div>
-      <div id="ledgerListWrap"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+        <button class="btn-secondary btn-small" onclick="setLedgerRange('month')">Is mahina</button>
+        <button class="btn-secondary btn-small" onclick="setLedgerRange('fy')">Is vittiya varsh</button>
+        <button class="btn-secondary btn-small" onclick="setLedgerRange('all')">Sab dates</button>
+        <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-left:8px;"><input type="checkbox" id="ledRunning" onchange="renderLedgerDetail()" /> Running balance dikhayein</label>
+        <button class="btn-secondary btn-small" style="margin-left:auto;" onclick="printLedger()">🖨️ Print Ledger</button>
+      </div>
       <div id="ledgerDetailWrap"></div>
     </div>
   </div>
@@ -620,11 +644,13 @@
   <div id="tab-report" class="tab-content" style="display:none;">
     <div class="summary-row" id="summaryBoxes"></div>
     <div class="card">
-      <h2>🏭 Trading Account <button class="btn-secondary btn-small" style="float:right;" onclick="printReportWrap('tradingWrap','Trading Account')">🖨️ Print</button></h2>
+      <h2>🏭 Trading Account <span style="float:right; display:flex; gap:6px;"><button class="btn-secondary btn-small" onclick="rptExpand('trading')">⊞ Expand all</button><button class="btn-secondary btn-small" onclick="rptCollapse('trading')">⊟ Collapse all</button><button class="btn-secondary btn-small" onclick="printReportWrap('tradingWrap','Trading Account')">🖨️ Print</button></span></h2>
+      <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">Group par click karein to uske ledgers dikhenge; ledger par click karne se uska Ledger khulega.</div>
       <div id="tradingWrap"></div>
     </div>
     <div class="card">
-      <h2>📊 <span id="ieCardTitle">Income & Expenditure Account</span> <button class="btn-secondary btn-small" style="float:right;" onclick="printReportWrap('reportBreakdown', TERM.ie)">🖨️ Print</button></h2>
+      <h2>📊 <span id="ieCardTitle">Income & Expenditure Account</span> <span style="float:right; display:flex; gap:6px;"><button class="btn-secondary btn-small" onclick="rptExpand('ie')">⊞ Expand all</button><button class="btn-secondary btn-small" onclick="rptCollapse('ie')">⊟ Collapse all</button><button class="btn-secondary btn-small" onclick="printReportWrap('reportBreakdown', TERM.ie)">🖨️ Print</button></span></h2>
+      <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">Group par click karein to uske ledgers dikhenge; ledger par click karne se uska Ledger khulega.</div>
       <div id="reportBreakdown"></div>
     </div>
     <div class="card">
@@ -1237,7 +1263,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('tab-'+btn.dataset.tab).style.display='block';
     if(btn.dataset.tab==='voucher') renderVoucherStockPanel();
     if(btn.dataset.tab==='inventory') renderInventory();
-    if(btn.dataset.tab==='report') renderReport();
+    if(btn.dataset.tab==='report'){ const _bb = document.getElementById('ledBackBtn'); if(_bb) _bb.style.display = 'none'; renderReport(); }
     if(btn.dataset.tab==='receipts') renderReceipts();
     if(btn.dataset.tab==='transactions') renderTransactions();
     if(btn.dataset.tab==='ledger') renderLedgerHeads();
@@ -1672,8 +1698,10 @@ function ledgerEntriesOfVoucher(v, name){
   const dr = v.lines.filter(l=>l.side==='Dr' && l.ledger===name).reduce((t,l)=>t+(Number(l.amount)||0),0);
   const cr = v.lines.filter(l=>l.side==='Cr' && l.ledger===name).reduce((t,l)=>t+(Number(l.amount)||0),0);
   const out = [];
-  if(dr > 0) out.push({ side:'dr', amount:r2(dr), other: uniq(v.lines.filter(l=>l.side==='Cr' && l.ledger!==name).map(l=>l.ledger)).join(', ') || crText(v) });
-  if(cr > 0) out.push({ side:'cr', amount:r2(cr), other: uniq(v.lines.filter(l=>l.side==='Dr' && l.ledger!==name).map(l=>l.ledger)).join(', ') || drText(v) });
+  const bothMany = v.lines.filter(l=>l.side==='Dr').length > 1 && v.lines.filter(l=>l.side==='Cr').length > 1;
+  const cp = (side)=> v.lines.filter(l=>l.side===side && l.ledger!==name).map(l=>({ ledger:l.ledger, amount: bothMany ? null : l.amount }));
+  if(dr > 0) out.push({ side:'dr', amount:r2(dr), other: uniq(v.lines.filter(l=>l.side==='Cr' && l.ledger!==name).map(l=>l.ledger)).join(', ') || crText(v), lines: cp('Cr') });
+  if(cr > 0) out.push({ side:'cr', amount:r2(cr), other: uniq(v.lines.filter(l=>l.side==='Dr' && l.ledger!==name).map(l=>l.ledger)).join(', ') || drText(v), lines: cp('Dr') });
   return out;
 }
 
@@ -2150,14 +2178,14 @@ function getAllLedgerEffects(ledgerName){
           id: v.id + '_d', date: v.date,
           particulars: 'Dr ' + ledgerName + ' — Cr ' + e.other + (v.note ? ' — ' + v.note : ''),
           vchType: v.voucherType, voucherNo: v.voucherNo,
-          debit: e.amount, credit: 0, ref: v.ref, note: v.note
+          debit: e.amount, credit: 0, ref: v.ref, note: v.note, other: e.other, otherLines: e.lines || []
         });
       } else {
         list.push({
           id: v.id + '_c', date: v.date,
           particulars: 'Cr ' + ledgerName + ' — Dr ' + e.other + (v.note ? ' — ' + v.note : ''),
           vchType: v.voucherType, voucherNo: v.voucherNo,
-          debit: 0, credit: e.amount, ref: v.ref, note: v.note
+          debit: 0, credit: e.amount, ref: v.ref, note: v.note, other: e.other, otherLines: e.lines || []
         });
       }
     });
@@ -2528,154 +2556,134 @@ function getAllHeads(){
   return [...names].sort((a,b)=> a.localeCompare(b,'hi'));
 }
 
+
+
+const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDT(d){ if(!d) return ''; const p = d.split('-'); return parseInt(p[2],10) + '-' + MON_SHORT[parseInt(p[1],10)-1] + '-' + p[0].slice(2); }
+function ledgerOpeningOf(head){
+  if(paymentHeads.includes(head)) return openingBalances[head] || 0;
+  if(assetHeads.includes(head)) return assetOpeningBalances[head] || 0;
+  if(liabilityHeads.includes(head)) return liabilityOpeningBalances[head] || 0;
+  return ledgerOpeningBalances[head] || 0;
+}
+function ledgerGroupOf(head){
+  const lm = ledgerMaster.find(l=>l.name===head); if(lm) return lm.group || '';
+  if(paymentHeads.includes(head)) return /cash|नकद/i.test(head) ? 'Cash-in-hand' : 'Bank Accounts';
+  if(assetHeads.includes(head)) return 'Fixed Assets';
+  if(liabilityHeads.includes(head)) return 'Loans (Liability)';
+  return '';
+}
+// Dr-positive net balance ke saath ledger ka period-wise hisaab
+function ledgerView(head, from, to){
+  const nature = natureOfLedger(head), debitNature = (nature === 'asset' || nature === 'expense');
+  const op0 = ledgerOpeningOf(head);
+  let openNet = debitNature ? op0 : -op0;
+  const rows = []; let totDr = 0, totCr = 0;
+  getAllLedgerEffects(head).forEach(e=>{
+    if(from && e.date < from){ openNet += e.debit - e.credit; return; }
+    if(to && e.date > to) return;
+    rows.push(e); totDr += e.debit; totCr += e.credit;
+  });
+  return { openNet: r2(openNet), rows, totDr: r2(totDr), totCr: r2(totCr), closeNet: r2(openNet + totDr - totCr) };
+}
+function ledgerTallyHtml(head, from, to, showRunning){
+  const v = ledgerView(head, from, to);
+  const dc = n => `<span class="tl-dc">${n >= 0 ? 'Dr' : 'Cr'}</span>`;
+  const amt = n => fmtPlain(Math.abs(n));
+  const cols = showRunning ? 7 : 6;
+  let run = v.openNet;
+  const body = v.rows.map(e=>{
+    run = r2(run + e.debit - e.credit);
+    let cp;
+    if(e.otherLines && e.otherLines.length > 1){
+      cp = '<div class="tl-cp">(As per details)</div>' + e.otherLines.map(l=>`<div class="tl-sub"><span>${escapeHtml(l.ledger)}</span><span>${l.amount != null ? fmtPlain(l.amount) : ''}</span></div>`).join('');
+    } else cp = `<div class="tl-cp">${escapeHtml(e.other || '')}</div>`;
+    const narr = [e.note, e.ref ? 'Ref: ' + e.ref : ''].filter(Boolean).join(' — ');
+    return `<tr><td style="white-space:nowrap;">${fmtDT(e.date)}</td>
+      <td>${cp}${narr ? `<div class="tl-narr">${escapeHtml(narr)}</div>` : ''}</td>
+      <td>${escapeHtml(VOUCHER_LABELS[e.vchType] ? VOUCHER_LABELS[e.vchType].replace(/ —.*$/, '') : (e.vchType || ''))}</td>
+      <td style="white-space:nowrap;">${escapeHtml(e.voucherNo || '')}</td>
+      <td class="amt">${e.debit ? fmtPlain(e.debit) : ''}</td><td class="amt">${e.credit ? fmtPlain(e.credit) : ''}</td>
+      ${showRunning ? `<td class="amt">${Math.abs(run) < 0.005 ? '0.00' : amt(run) + dc(run)}</td>` : ''}</tr>`;
+  }).join('');
+  const openDr = v.openNet > 0 ? v.openNet : 0, openCr = v.openNet < 0 ? -v.openNet : 0;
+  const closeDr = v.closeNet < 0 ? -v.closeNet : 0, closeCr = v.closeNet > 0 ? v.closeNet : 0;
+  const grandDr = r2(openDr + v.totDr + closeDr), grandCr = r2(openCr + v.totCr + closeCr);
+  const empty = `<td></td>`.repeat(showRunning ? 1 : 0);
+  const openRow = Math.abs(v.openNet) > 0.004
+    ? `<tr class="tl-open"><td></td><td>Opening Balance${dc(v.openNet)}</td><td></td><td></td><td class="amt">${openDr ? fmtPlain(openDr) : ''}</td><td class="amt">${openCr ? fmtPlain(openCr) : ''}</td>${empty}</tr>` : '';
+  const curRow = `<tr class="tl-cur"><td></td><td>Current Total</td><td></td><td></td><td class="amt">${fmtPlain(v.totDr)}</td><td class="amt">${fmtPlain(v.totCr)}</td>${empty}</tr>`;
+  const closeRow = Math.abs(v.closeNet) > 0.004
+    ? `<tr class="tl-close"><td></td><td>Closing Balance${dc(v.closeNet)}</td><td></td><td></td><td class="amt">${closeDr ? fmtPlain(closeDr) : ''}</td><td class="amt">${closeCr ? fmtPlain(closeCr) : ''}</td>${empty}</tr>` : '';
+  const totRow = `<tr class="tl-total"><td></td><td>Total</td><td></td><td></td><td class="amt">${fmtPlain(grandDr)}</td><td class="amt">${fmtPlain(grandCr)}</td>${empty}</tr>`;
+  const grp = ledgerGroupOf(head);
+  const period = (from || to) ? `${from ? fmtDT(from) : 'Shuru'} to ${to ? fmtDT(to) : 'Aaj tak'}` : 'Sab dates';
+  return `<div class="tl-head">
+      <div class="tl-name">Ledger: ${escapeHtml(head)}</div>
+      <div class="tl-meta">${grp ? 'Group: ' + escapeHtml(grp) + ' &nbsp;|&nbsp; ' : ''}Period: ${period}</div>
+    </div>
+    <div style="overflow-x:auto;"><table class="tl-table">
+      <thead><tr><th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No.</th><th class="r">Debit</th><th class="r">Credit</th>${showRunning ? '<th class="r">Balance</th>' : ''}</tr></thead>
+      <tbody>${openRow}${body || `<tr><td colspan="${cols}" style="text-align:center; color:#9ca3af;">Is avadhi me koi entry nahi</td></tr>`}${curRow}${closeRow}${totRow}</tbody>
+    </table></div>`;
+}
+function setLedgerRange(kind){
+  const now = new Date(); let from = '', to = '';
+  if(kind === 'month'){ from = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)); to = ymdLocal(new Date(now.getFullYear(), now.getMonth()+1, 0)); }
+  else if(kind === 'fy'){ const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1; from = y + '-04-01'; to = (y+1) + '-03-31'; }
+  document.getElementById('ledFrom').value = from; document.getElementById('ledTo').value = to;
+  renderLedgerDetail();
+}
 function renderLedgerHeads(){
   const select = document.getElementById('ledgerHeadSelect');
   const heads = getAllHeads();
-  if(heads.length===0){
+  if(heads.length === 0){
     select.innerHTML = '<option value="">-- No entry --</option>';
-    document.getElementById('ledgerListWrap').innerHTML = '';
     document.getElementById('ledgerDetailWrap').innerHTML = '<div class="empty">No data yet</div>';
     return;
   }
   const prevVal = select.value;
   select.innerHTML = heads.map(h=>`<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
   select.value = heads.includes(prevVal) ? prevVal : heads[0];
-  const rows = heads.map(h=>{
-    const effects = getAllLedgerEffects(h);
-    const totalDr = effects.reduce((s,e)=>s+e.debit,0);
-    const totalCr = effects.reduce((s,e)=>s+e.credit,0);
-    const bal = formatLedgerBalance(h);
-    return `<tr>
-      <td style="text-align:left;">${escapeHtml(h)}</td>
-      <td>${effects.length}</td>
-      <td class="amt-expense">${fmt(totalDr)}</td>
-      <td class="amt-income">${fmt(totalCr)}</td>
-      <td style="font-family:monospace; font-weight:700;">${bal}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('ledgerListWrap').innerHTML = `
-    <table style="margin-bottom:18px;"><thead><tr><th style="text-align:left;">Name/Head</th><th>Entries</th><th>Total Dr</th><th>Total Cr</th><th>Balance</th></tr></thead><tbody>${rows}</tbody></table>`;
   renderLedgerDetail();
 }
-
 function renderLedgerDetail(){
   const head = document.getElementById('ledgerHeadSelect').value;
   const wrap = document.getElementById('ledgerDetailWrap');
-  if(!head){ wrap.innerHTML=''; return; }
-  const nature = natureOfLedger(head);
-  const isDebitNature = (nature === 'asset' || nature === 'expense');
-  const effects = getAllLedgerEffects(head);
-  let opening = 0;
-  if(paymentHeads.includes(head)) opening = openingBalances[head] || 0;
-  else if(assetHeads.includes(head)) opening = assetOpeningBalances[head] || 0;
-  else if(liabilityHeads.includes(head)) opening = liabilityOpeningBalances[head] || 0;
-  else opening = ledgerOpeningBalances[head] || 0;
-  let running = opening;
-  const rows = effects.map(e=>{
-    if(isDebitNature) running += e.debit - e.credit;
-    else running += e.credit - e.debit;
-    const abs = Math.abs(running);
-    let balStr = abs < 0.001 ? '0.00' : ('₹' + fmtPlain(abs) + ' ' + (((isDebitNature && running>=0) || (!isDebitNature && running<0)) ? 'Dr' : 'Cr'));
-    return `<tr>
-      <td style="text-align:left;">${e.date}</td>
-      <td style="text-align:left;"><span class="tag vch">${escapeHtml(e.voucherNo || '')}</span> ${escapeHtml(e.particulars)}</td>
-      <td style="text-align:left;">${escapeHtml(VOUCHER_LABELS[e.vchType] || '')}</td>
-      <td>${e.debit ? fmtPlain(e.debit) : ''}</td>
-      <td>${e.credit ? fmtPlain(e.credit) : ''}</td>
-      <td style="text-align:right; font-family:monospace;">${balStr}</td>
-    </tr>`;
-  }).join('');
-  const totalDebit = effects.reduce((s,e)=>s+e.debit,0);
-  const totalCredit = effects.reduce((s,e)=>s+e.credit,0);
-  const absClosing = Math.abs(running);
-  let closingStr = absClosing < 0.001 ? '₹0.00' : ('₹' + fmtPlain(absClosing) + ' ' + (((isDebitNature && running>=0) || (!isDebitNature && running<0)) ? 'Dr' : 'Cr'));
-  wrap.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-      <h3 style="color:var(--primary-dark); margin:0;">Ledger — ${escapeHtml(head)}</h3>
-      <button class="btn-secondary btn-small" onclick="printLedger()">🖨️ Print Ledger</button>
-    </div>
-    <table class="ledger-table">
-      <thead><tr>
-        <th style="text-align:left;">Date</th><th style="text-align:left;">Particulars</th>
-        <th style="text-align:left;">Vch</th><th style="text-align:right;">Debit</th>
-        <th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th>
-      </tr></thead>
-      <tbody>
-        <tr class="opening-row">
-          <td style="text-align:left;"></td><td style="text-align:left;"><b>Opening Balance</b></td>
-          <td style="text-align:left;">-</td><td style="text-align:right;"></td><td style="text-align:right;"></td>
-          <td style="text-align:right;">${opening !== 0 ? ('₹' + fmtPlain(Math.abs(opening))) : '₹0.00'}</td>
-        </tr>
-        ${rows || '<tr><td colspan="6" class="empty">No entries</td></tr>'}
-        <tr class="ledger-total-row">
-          <td colspan="3" style="text-align:right;">Total</td>
-          <td style="text-align:right;">${fmtPlain(totalDebit)}</td>
-          <td style="text-align:right;">${fmtPlain(totalCredit)}</td>
-          <td style="text-align:right;">${closingStr}</td>
-        </tr>
-      </tbody>
-    </table>
-    <div style="font-size:12px; color:var(--muted); margin-top:8px;">Closing: <b>${closingStr}</b></div>
-  `;
+  if(!head){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = ledgerTallyHtml(head, document.getElementById('ledFrom').value, document.getElementById('ledTo').value, document.getElementById('ledRunning').checked);
 }
-
 function printLedger(){
   const head = document.getElementById('ledgerHeadSelect').value;
   if(!head) return;
-  const effects = getAllLedgerEffects(head);
-  const nature = natureOfLedger(head);
-  const isDebitNature = (nature === 'asset' || nature === 'expense');
-  let opening = 0;
-  if(paymentHeads.includes(head)) opening = openingBalances[head] || 0;
-  else if(assetHeads.includes(head)) opening = assetOpeningBalances[head] || 0;
-  else if(liabilityHeads.includes(head)) opening = liabilityOpeningBalances[head] || 0;
-  else opening = ledgerOpeningBalances[head] || 0;
-  let running = opening;
-  const rows = effects.map(e=>{
-    if(isDebitNature) running += e.debit - e.credit;
-    else running += e.credit - e.debit;
-    const abs = Math.abs(running);
-    let balStr = abs < 0.001 ? '0.00' : ('₹' + fmtPlain(abs) + ' ' + (((isDebitNature && running>=0) || (!isDebitNature && running<0)) ? 'Dr' : 'Cr'));
-    return `<tr>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd;">${e.date}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd;">${escapeHtml(e.particulars)}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd;">${escapeHtml(e.voucherNo||'')}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd; text-align:right;">${e.debit ? fmtPlain(e.debit) : ''}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd; text-align:right;">${e.credit ? fmtPlain(e.credit) : ''}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid #ddd; text-align:right;">${balStr}</td>
-    </tr>`;
-  }).join('');
   const hdr = getTrustHeaderHtml();
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
     <html><head><meta charset="UTF-8"><title>${escapeHtml(head)} - Ledger</title>
     <style>
-      body{ font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color:#1f2937; }
+      body{ font-family:'Segoe UI',Arial,sans-serif; padding:30px; color:#1f2937; }
       .header-box{ text-align:center; padding-bottom:12px; border-bottom:2px solid #0f6e4e; margin-bottom:10px; }
       .header-box h1{ color:#0b5539; margin:0 0 4px; font-size:22px; }
       .header-box .hdr-line{ font-size:12px; color:#4b5563; line-height:1.5; }
-      .ledger-title{ text-align:center; font-size:15px; font-weight:700; color:#0b5539; margin:14px 0 6px; border-top:1px solid #ddd; border-bottom:1px solid #ddd; padding:6px 0; }
-      table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
-      th{ background:#f4f6f8; padding:8px; text-align:left; border-bottom:2px solid #0f6e4e; font-size:12px; }
-      td{ padding:6px 8px; border-bottom:1px solid #eee; }
+      .tl-name{ font-size:16px; font-weight:700; color:#0b5539; } .tl-meta{ font-size:12px; color:#6b7280; margin:2px 0 8px; }
+      .tl-table{ width:100%; border-collapse:collapse; font-size:12px; border-top:2px solid #0f6e4e; border-bottom:2px solid #0f6e4e; }
+      .tl-table th{ padding:6px 7px; text-align:left; border-bottom:1px solid #0f6e4e; background:#f4f6f8; font-size:11.5px; }
+      .tl-table th.r, .tl-table td.amt{ text-align:right; }
+      .tl-table td{ padding:5px 7px; border-bottom:1px solid #eee; vertical-align:top; }
+      .tl-table td.amt{ font-family:'Courier New',monospace; white-space:nowrap; }
+      .tl-cp{ font-weight:600; } .tl-narr{ font-size:11px; color:#6b7280; font-style:italic; }
+      .tl-sub{ display:flex; justify-content:space-between; gap:12px; font-size:11px; padding-left:12px; max-width:300px; }
+      .tl-dc{ font-size:10px; color:#6b7280; margin-left:3px; }
+      .tl-table tr.tl-open td, .tl-table tr.tl-close td{ font-weight:700; }
+      .tl-table tr.tl-cur td{ font-weight:600; border-top:1px solid #aaa; }
+      .tl-table tr.tl-total td{ font-weight:800; border-top:2px solid #0f6e4e; border-bottom:none; }
       @media print{ button{ display:none; } }
     </style></head>
     <body>
-      <div class="header-box">
-        <h1>${escapeHtml(hdr.name)}</h1>
-        ${hdr.lines.map(l => `<div class="hdr-line">${escapeHtml(l)}</div>`).join('')}
-      </div>
-      <div class="ledger-title">Ledger Account — ${escapeHtml(head)}</div>
-      <table>
-        <thead><tr><th>Date</th><th>Particulars</th><th>Vch</th>
-          <th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th>
-          <th style="text-align:right;">Balance</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;">No entries</td></tr>'}</tbody>
-      </table>
+      <div class="header-box"><h1>${escapeHtml(hdr.name)}</h1>${hdr.lines.map(l => `<div class="hdr-line">${escapeHtml(l)}</div>`).join('')}</div>
+      ${ledgerTallyHtml(head, document.getElementById('ledFrom').value, document.getElementById('ledTo').value, document.getElementById('ledRunning').checked)}
       ${getSignatoryHtml()}
-      <div style="text-align:center; margin-top:24px;">
-        <button onclick="window.print()" style="padding:10px 20px; background:#0f6e4e; color:#fff; border:none; border-radius:6px; cursor:pointer;">🖨️ Print</button>
-      </div>
+      <div style="text-align:center; margin-top:24px;"><button onclick="window.print()" style="padding:10px 20px; background:#0f6e4e; color:#fff; border:none; border-radius:6px; cursor:pointer;">🖨️ Print</button></div>
     </body></html>
   `);
   printWindow.document.close();
@@ -2948,109 +2956,37 @@ function renderReport(){
     <div class="summary-box"><div class="label">Net ${pl.net>=0?TERM.sur:TERM.def}</div><div class="value" style="color:${pl.net>=0?'var(--income)':'var(--expense)'};">${fmt(Math.abs(pl.net))}</div></div>
   `;
 
-  // ===================== Trading Account =====================
-  const hasTrading = pl.tradingDr !== 0 || pl.tradingCr !== 0;
+  // ===================== Trading Account (group -> ledger, Tally style) =====================
   const grossProfit = pl.gross > 0 ? pl.gross : 0;
   const grossLoss = pl.gross < 0 ? -pl.gross : 0;
-  const tLeftTotal = pl.tradingDr + grossProfit;
-  const tRightTotal = pl.tradingCr + grossLoss;
+  const hasTrading = pl.tradingDr !== 0 || pl.tradingCr !== 0;
+  const tLeft = [{ key:'t.os', label:'Opening Stock', amt: pl.openingStock, kids: stockGroupKids('open') }]
+    .concat(plGroupNodes(b.purchase, 't.p'), plGroupNodes(b.directExp, 't.de'));
+  if(grossProfit) tLeft.push({ label:'Gross Profit c/o', amt: grossProfit });
+  const tRight = plGroupNodes(b.sales, 't.s').concat(plGroupNodes(b.directInc, 't.di'));
+  tRight.push({ key:'t.cs', label:'Closing Stock', amt: pl.closingStock, kids: stockGroupKids('close') });
+  if(grossLoss) tRight.push({ label:'Gross Loss c/o', amt: grossLoss });
+  RPT_CACHE.trading = { wrapId:'tradingWrap', title:'Trading Account', leftHead:'PARTICULARS (Dr)', rightHead:'PARTICULARS (Cr)',
+    left:tLeft, right:tRight, lt: pl.tradingDr + grossProfit, rt: pl.tradingCr + grossLoss,
+    note: hasTrading ? '' : 'Abhi koi Sales / Purchase / Direct Expense entry nahi hai — Trading Account khaali hai.' };
 
-  const tLeft = `
-    <tr><td style="text-align:left; padding-left:20px;">Opening Stock</td><td class="amt dr">${fmtPlain(pl.openingStock)}</td></tr>
-    ${plSection('Purchase Accounts', b.purchase, 'amt dr', false)}
-    ${plSection('Direct Expenses', b.directExp, 'amt dr', false)}
-    ${grossProfit ? `<tr class="subtotal-row"><td style="text-align:left; padding-left:20px;">To Gross Profit c/o</td><td class="amt cr">${fmtPlain(grossProfit)}</td></tr>` : ''}`;
-  const tRight = `
-    ${plSection('Sales Accounts', b.sales, 'amt cr', true)}
-    ${plSection('Direct Income', b.directInc, 'amt cr', true)}
-    <tr><td style="text-align:left; padding-left:20px;">Closing Stock</td><td class="amt cr">${fmtPlain(pl.closingStock)}</td></tr>
-    ${grossLoss ? `<tr class="subtotal-row"><td style="text-align:left; padding-left:20px;">By Gross Loss c/o</td><td class="amt dr">${fmtPlain(grossLoss)}</td></tr>` : ''}`;
-
-  document.getElementById('tradingWrap').innerHTML = `
-    <div style="text-align:center; margin-bottom:14px;">
-      <h3 style="margin:0 0 4px; color:#0b5539;">${escapeHtml(hdr.name)}</h3>
-      <div style="font-size:12px; color:#666;">Trading Account as on ${todayStr()}</div>
-    </div>
-    <table class="bs-table">
-      <thead><tr>
-        <th style="width:35%;">PARTICULARS (Dr)</th>
-        <th class="right-h" style="width:15%;">Amount (₹)</th>
-        <th style="width:35%; border-left:2px solid #0f6e4e;">PARTICULARS (Cr)</th>
-        <th class="right-h" style="width:15%;">Amount (₹)</th>
-      </tr></thead>
-      <tbody>
-        <tr>
-          <td colspan="2" style="vertical-align:top; border-right:2px solid #0f6e4e; padding:0;"><table class="bs-table">${tLeft}</table></td>
-          <td colspan="2" style="vertical-align:top; padding:0;"><table class="bs-table">${tRight}</table></td>
-        </tr>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700; border-right:2px solid #0f6e4e;">Total</td>
-          <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right;">${fmtPlain(tLeftTotal)}</td>
-          <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700;">Total</td>
-          <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right;">${fmtPlain(tRightTotal)}</td>
-        </tr>
-      </tfoot>
-    </table>
-    ${hasTrading ? '' : '<div style="font-size:12px; color:var(--muted); text-align:center; margin-top:8px;">Abhi koi Sales / Purchase / Direct Expense entry nahi hai — Trading Account khaali hai.</div>'}
-  `;
-
-  // ===================== Income & Expenditure (P&L) =====================
-  const iLeftExp = plLedgerRows(b.indExp, 'amt-expense');
-  const iRightInc = plLedgerRows(b.indInc, 'amt-income');
-  const grossLossRow = grossLoss ? `<tr class="subtotal-row"><td style="text-align:left; padding-left:20px;">To Gross Loss b/d</td><td class="amt dr">${fmtPlain(grossLoss)}</td></tr>` : '';
-  const grossProfitRow = grossProfit ? `<tr class="subtotal-row"><td style="text-align:left; padding-left:20px;">By Gross Profit b/d</td><td class="amt cr">${fmtPlain(grossProfit)}</td></tr>` : '';
-  const iLeftTotal = pl.indExpTotal + grossLoss;
-  const iRightTotal = pl.indIncTotal + grossProfit;
-
-  document.getElementById('reportBreakdown').innerHTML = `
-    <div style="text-align:center; margin-bottom:14px;">
-      <h3 style="margin:0 0 4px; color:#0b5539;">${escapeHtml(hdr.name)}</h3>
-      <div style="font-size:12px; color:#666;">${TERM.ie} as on ${todayStr()}</div>
-    </div>
-    <table class="bs-table">
-      <thead><tr>
-        <th style="width:35%;">EXPENDITURE (Dr)</th>
-        <th class="right-h" style="width:15%;">Amount (₹)</th>
-        <th style="width:35%; border-left:2px solid #0f6e4e;">INCOME (Cr)</th>
-        <th class="right-h" style="width:15%;">Amount (₹)</th>
-      </tr></thead>
-      <tbody>
-        <tr>
-          <td colspan="2" style="vertical-align:top; border-right:2px solid #0f6e4e; padding:0;">
-            <table class="bs-table">
-              ${grossLossRow}
-              ${iLeftExp || (grossLossRow ? '' : '<tr><td class="empty" colspan="2">No expense</td></tr>')}
-            </table>
-          </td>
-          <td colspan="2" style="vertical-align:top; padding:0;">
-            <table class="bs-table">
-              ${grossProfitRow}
-              ${iRightInc || (grossProfitRow ? '' : '<tr><td class="empty" colspan="2">No income</td></tr>')}
-            </table>
-          </td>
-        </tr>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700; border-right:2px solid #0f6e4e;">Total Expense</td>
-          <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right;">${fmtPlain(iLeftTotal)}</td>
-          <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700;">Total Income</td>
-          <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right;">${fmtPlain(iRightTotal)}</td>
-        </tr>
-      </tfoot>
-    </table>
-    <div style="height:14px;"></div>
-    <table class="bs-table">
-      <thead><tr><th>Summary</th><th class="right-h">Amount (₹)</th></tr></thead>
-      <tbody>
-        <tr><td>Total Income</td><td class="amt cr">${fmtPlain(iRightTotal)}</td></tr>
-        <tr><td>Less: Total Expense</td><td class="amt dr">(${fmtPlain(iLeftTotal)})</td></tr>
-        <tr class="total-row"><td>NET ${pl.net>=0?TERM.SUR:TERM.DEF}</td><td class="amt">${fmtPlain(Math.abs(pl.net))}</td></tr>
-      </tbody>
-    </table>
-  `;
+  // ===================== Income & Expenditure / Profit & Loss (balanced, Tally style) =====================
+  const surplus = pl.net > 0 ? pl.net : 0, deficit = pl.net < 0 ? -pl.net : 0;
+  const surLabel = IS_FIRM ? 'Net Profit' : 'Excess of Income over Expenditure';
+  const defLabel = IS_FIRM ? 'Net Loss' : 'Excess of Expenditure over Income';
+  const iLeft = [];
+  if(grossLoss) iLeft.push({ label:'Gross Loss b/d', amt: grossLoss });
+  plGroupNodes(b.indExp, 'ie.e').forEach(n=>iLeft.push(n));
+  if(surplus) iLeft.push({ label: surLabel, amt: surplus });
+  const iRight = [];
+  if(grossProfit) iRight.push({ label:'Gross Profit b/d', amt: grossProfit });
+  plGroupNodes(b.indInc, 'ie.i').forEach(n=>iRight.push(n));
+  if(deficit) iRight.push({ label: defLabel, amt: deficit });
+  RPT_CACHE.ie = { wrapId:'reportBreakdown', title: TERM.ie, leftHead:'EXPENDITURE (Dr)', rightHead:'INCOME (Cr)',
+    left:iLeft, right:iRight, lt: pl.indExpTotal + grossLoss + surplus, rt: pl.indIncTotal + grossProfit + deficit, note:'' };
+  if(!iLeft.length) iLeft.push({ label:'(koi kharch nahi)', amt:0 });
+  if(!iRight.length) iRight.push({ label:'(koi aay nahi)', amt:0 });
+  drawTwoSided('trading'); drawTwoSided('ie');
 
   renderBalanceSheet();
 }
@@ -3176,8 +3112,8 @@ function renderBalanceSheet(){
   // ===================== Tally-style tree (group -> ledgers) =====================
   const nz = v => Math.abs(v) > 0.001;
   const sum = o => Object.values(o).reduce((t,v)=>t+v,0);
-  const leaf = (label, amt) => ({ label, amt });
-  const leaves = obj => Object.keys(obj).filter(k=>nz(obj[k])).sort().map(k=>leaf(k, obj[k]));
+  const leaf = (label, amt, ledger) => ({ label, amt, ledger });
+  const leaves = obj => Object.keys(obj).filter(k=>nz(obj[k])).sort().map(k=>leaf(k, obj[k], k));
   const isCash = n => { const lm = ledgerMaster.find(l=>l.name===n); if(lm && lm.group==='Cash-in-hand') return true; if(lm && lm.group==='Bank Accounts') return false; return /cash|नकद/i.test(n); };
   const cashAll = {}, bankAll = {};
   Object.keys(cashBank).forEach(k=> (isCash(k) ? cashAll : bankAll)[k] = cashBank[k]);
@@ -3188,8 +3124,12 @@ function renderBalanceSheet(){
 
   // ---- Liabilities & Capital
   const capKids = [];
-  if(nz(openingAll)) capKids.push(leaf('Opening Balance', openingAll));
-  Object.keys(capitalLedgers).filter(k=>nz(capitalLedgers[k])).sort().forEach(k=> capKids.push(leaf(k, capitalLedgers[k])));
+  const openKids = [];
+  Object.keys(openingBalances).filter(h=>nz(openingBalances[h])).sort().forEach(h=> openKids.push(leaf(h, openingBalances[h], h)));
+  Object.keys(assetOpeningBalances).filter(h=>nz(assetOpeningBalances[h])).sort().forEach(h=> openKids.push(leaf(h, assetOpeningBalances[h], h)));
+  if(nz(openingStockVal)) openKids.push({ key:'cap.open.stock', label:'Opening Stock', amt: openingStockVal, kids: stockGroupKids('open') });
+  if(nz(openingAll)) capKids.push({ key:'cap.open', label:'Opening Balance (ledger-wise)', amt: openingAll, kids: openKids });
+  Object.keys(capitalLedgers).filter(k=>nz(capitalLedgers[k])).sort().forEach(k=> capKids.push(leaf(k, capitalLedgers[k], k)));
   const plKids = [];
   if(nz(pl.gross)) plKids.push(leaf('Gross ' + (pl.gross>=0?'Profit':'Loss'), pl.gross));
   if(nz(pl.indIncTotal)) plKids.push(leaf('Add: Indirect Income', pl.indIncTotal));
@@ -3234,7 +3174,7 @@ function bsRows(nodes, depth, side){
     const cls = depth === 0 ? 'bs-g' : (hasKids ? 'bs-sg' : 'bs-leaf');
     const arrow = hasKids ? `<span class="bs-arrow">${open ? '▼' : '▶'}</span> ` : (depth === 0 ? '<span class="bs-arrow" style="visibility:hidden;">▶</span> ' : '');
     out += `<tr class="${cls}"${hasKids ? ` onclick="toggleBs('${n.key}')" style="cursor:pointer;" title="Click karein"` : ''}>` +
-           `<td style="padding-left:${12 + depth*20}px;">${arrow}${escapeHtml(n.label)}</td><td class="amt ${side}">${bsFmt(n.amt)}</td></tr>`;
+           `<td style="padding-left:${12 + depth*20}px;">${arrow}${n.ledger ? `<a class="bs-link" data-ledger="${escapeHtml(n.ledger)}" title="Ledger kholne ke liye click karein">${escapeHtml(n.label)}</a>` : escapeHtml(n.label)}</td><td class="amt ${side}">${bsFmt(n.amt)}</td></tr>`;
     if(open) out += bsRows(n.kids, depth + 1, side);
   });
   return out;
@@ -3243,9 +3183,84 @@ function bsAllKeys(nodes, acc){
   nodes.forEach(n=>{ if(n.kids && n.kids.length){ acc.push(n.key); bsAllKeys(n.kids, acc); } });
   return acc;
 }
-function toggleBs(key){ if(BS_OPEN.has(key)) BS_OPEN.delete(key); else BS_OPEN.add(key); drawBalanceSheet(); }
-function bsExpandAll(){ if(!BS_CACHE) return; bsAllKeys(BS_CACHE.left.concat(BS_CACHE.right), []).forEach(k=>BS_OPEN.add(k)); drawBalanceSheet(); }
-function bsCollapseAll(){ BS_OPEN.clear(); drawBalanceSheet(); }
+function toggleBs(key){ if(BS_OPEN.has(key)) BS_OPEN.delete(key); else BS_OPEN.add(key); drawAllReports(); }
+function bsExpandAll(){ rptExpand('bs'); }
+function bsCollapseAll(){ rptCollapse('bs'); }
+let RPT_CACHE = {};
+function rptKeys(which){
+  const c = which === 'bs' ? BS_CACHE : RPT_CACHE[which];
+  return c ? bsAllKeys(c.left.concat(c.right), []) : [];
+}
+function rptExpand(which){ rptKeys(which).forEach(k=>BS_OPEN.add(k)); drawAllReports(); }
+function rptCollapse(which){ rptKeys(which).forEach(k=>BS_OPEN.delete(k)); drawAllReports(); }
+function drawAllReports(){ drawBalanceSheet(); drawTwoSided('trading'); drawTwoSided('ie'); }
+function stockGroupKids(kind){
+  const by = {};
+  computeStockSummary('', '').forEach(r=>{
+    const g = r.item.group || 'Ungrouped';
+    by[g] = (by[g]||0) + (kind === 'open' ? (Number(r.item.openingQty)||0) * (Number(r.item.openingRate)||0) : r.clVal);
+  });
+  return Object.keys(by).filter(g=>Math.abs(by[g]) > 0.001).sort().map(g=>({ label:g, amt:by[g] }));
+}
+// ledger ke group ke hisaab se nodes (group -> ledgers)
+function plGroupNodes(obj, keyPrefix){
+  const groups = {}, loose = [];
+  Object.keys(obj).filter(k=>Math.abs(obj[k]) > 0.001).sort().forEach(k=>{
+    const lm = ledgerMaster.find(l=>l.name === k);
+    const leaf = { label:k, amt:obj[k], ledger:k };
+    if(lm && lm.group) (groups[lm.group] = groups[lm.group] || []).push(leaf); else loose.push(leaf);
+  });
+  const nodes = Object.keys(groups).sort().map(g=>({ key: keyPrefix + '.' + g, label: g, amt: groups[g].reduce((t,x)=>t+x.amt,0), kids: groups[g] }));
+  return nodes.concat(loose);
+}
+function drawTwoSided(which){
+  const c = RPT_CACHE[which]; if(!c) return;
+  const hdr = getTrustHeaderHtml();
+  document.getElementById(c.wrapId).innerHTML = `
+    <div style="text-align:center; margin-bottom:14px;">
+      <h3 style="margin:0 0 4px; color:#0b5539;">${escapeHtml(hdr.name)}</h3>
+      <div style="font-size:12px; color:#666;">${escapeHtml(c.title)} as on ${todayStr()}</div>
+    </div>
+    <table style="width:100%; border-collapse:collapse; border:2px solid #0f6e4e;">
+      <thead><tr>
+        <th style="background:#0f6e4e; color:#fff; padding:10px 14px; text-align:left; font-size:14px; width:35%;">${escapeHtml(c.leftHead)}</th>
+        <th style="background:#0f6e4e; color:#fff; padding:10px 14px; text-align:right; font-size:14px; width:15%;">Amount (₹)</th>
+        <th style="background:#1a7a56; color:#fff; padding:10px 14px; text-align:left; font-size:14px; width:35%; border-left:2px solid #0f6e4e;">${escapeHtml(c.rightHead)}</th>
+        <th style="background:#1a7a56; color:#fff; padding:10px 14px; text-align:right; font-size:14px; width:15%;">Amount (₹)</th>
+      </tr></thead>
+      <tbody><tr>
+        <td colspan="2" style="vertical-align:top; padding:0; border-right:2px solid #0f6e4e;"><table class="bs-table">${bsRows(c.left, 0, 'dr')}</table></td>
+        <td colspan="2" style="vertical-align:top; padding:0;"><table class="bs-table">${bsRows(c.right, 0, 'cr')}</table></td>
+      </tr></tbody>
+      <tfoot><tr>
+        <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700; border-right:2px solid #0f6e4e; border-top:2px solid #0f6e4e;">Total</td>
+        <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right; border-top:2px solid #0f6e4e;">${fmtPlain(c.lt)}</td>
+        <td style="text-align:right; padding:10px 14px; background:#f0fdf4; font-weight:700; border-top:2px solid #0f6e4e;">Total</td>
+        <td class="amt" style="background:#f0fdf4; font-weight:700; padding:10px 14px; text-align:right; border-top:2px solid #0f6e4e;">${fmtPlain(c.rt)}</td>
+      </tr></tfoot>
+    </table>
+    ${c.note ? `<div style="font-size:12px; color:var(--muted); text-align:center; margin-top:8px;">${c.note}</div>` : ''}`;
+}
+// Report se ledger par click -> seedha Ledger by Head
+let LEDGER_BACK = '';
+function openLedgerFromReport(name){
+  const cur = document.querySelector('nav button.active'); LEDGER_BACK = cur ? cur.dataset.tab : 'report';
+  const nb = document.querySelector('nav button[data-tab="ledger"]'); if(nb) nb.click();
+  const sel = document.getElementById('ledgerHeadSelect');
+  if(sel && ![...sel.options].some(o=>o.value === name)){ const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o); }
+  if(sel) sel.value = name;
+  renderLedgerDetail();
+  const bb = document.getElementById('ledBackBtn'); if(bb) bb.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function ledgerBack(){
+  const bb = document.getElementById('ledBackBtn'); if(bb) bb.style.display = 'none';
+  const b = document.querySelector('nav button[data-tab="' + (LEDGER_BACK || 'report') + '"]'); if(b) b.click();
+}
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest && e.target.closest('[data-ledger]');
+  if(el && el.dataset.ledger) openLedgerFromReport(el.dataset.ledger);
+});
 function drawBalanceSheet(){
   if(!BS_CACHE) return;
   const { left, right, leftTotal, rightTotal, diff } = BS_CACHE;
