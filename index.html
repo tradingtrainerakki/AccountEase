@@ -3264,8 +3264,9 @@ document.addEventListener('click', (e)=>{
 function drawBalanceSheet(){
   if(!BS_CACHE) return;
   const { left, right, leftTotal, rightTotal, diff } = BS_CACHE;
-  const leftRows = bsRows(left, 0, 'cr') + `<tr class="total-row"><td>GRAND TOTAL</td><td class="amt">${fmtPlain(leftTotal)}</td></tr>`;
-  const rightRows = bsRows(right, 0, 'dr') + `<tr class="total-row"><td>GRAND TOTAL</td><td class="amt">${fmtPlain(rightTotal)}</td></tr>`;
+  const leftRows = bsRows(left, 0, 'cr');
+  const rightRows = bsRows(right, 0, 'dr');
+  const gtStyle = 'background:#0f6e4e; color:#fff; font-weight:800; padding:12px 14px; border-top:2px solid #0f6e4e;';
   const hdr = getTrustHeaderHtml();
   document.getElementById('balanceSheetWrap').innerHTML = `
     <div style="text-align:center; margin-bottom:14px;">
@@ -3288,6 +3289,12 @@ function drawBalanceSheet(){
         </tr>
       </tbody>
       <tfoot>
+        <tr>
+          <td style="${gtStyle} text-align:right; border-right:2px solid #0f6e4e;">GRAND TOTAL</td>
+          <td class="amt" style="${gtStyle} text-align:right; font-family:'Courier New',monospace;">${fmtPlain(leftTotal)}</td>
+          <td style="${gtStyle} text-align:right; border-right:none;">GRAND TOTAL</td>
+          <td class="amt" style="${gtStyle} text-align:right; font-family:'Courier New',monospace;">${fmtPlain(rightTotal)}</td>
+        </tr>
         <tr>
           <td colspan="4" style="padding:14px; text-align:center; background:${Math.abs(diff)<1?'#e7f5ee':'#fdecea'}; border-top:2px solid #0f6e4e;">
             ${Math.abs(diff)<1
