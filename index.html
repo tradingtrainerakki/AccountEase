@@ -358,6 +358,7 @@
     <button class="tab-btn" data-tab="accounts">🏦 Account Management</button>
     <button class="tab-btn" data-tab="receipts">🧾 Receipts</button>
     <button class="tab-btn" data-tab="inventory">📦 Inventory</button>
+    <button class="tab-btn" data-tab="outstanding">⏳ Outstanding</button>
     <button class="tab-btn" data-tab="gst">📑 GST</button>
     <button class="tab-btn" data-tab="report">📊 Report</button>
     <button class="tab-btn" data-tab="reconcile">🔄 Reconciliation</button>
@@ -399,6 +400,10 @@
         <div class="field" id="amountField"><label>Amount (₹)</label><input id="vch_amount" type="number" placeholder="e.g. 5000" onchange="onVoucherFieldChange()" oninput="onVoucherFieldChange()" /></div>
         <div class="field"><label>Date</label><input id="vch_date" type="date" onchange="onVoucherFieldChange()" /></div>
         <div class="field"><label>Reference / Cheque No.</label><input id="vch_ref" placeholder="Optional" /></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Credit days (optional)</label><input id="vch_credit" type="number" min="0" step="1" placeholder="khaali = party ka default" /></div>
+        <div class="field"></div><div class="field"></div>
       </div>
       <div id="gstPanel" style="display:none;"></div>
       <div id="multiLinesWrap" style="display:none;"></div>
@@ -651,6 +656,24 @@
     </div>
   </div>
 
+  <div id="tab-outstanding" class="tab-content" style="display:none;">
+    <div class="card">
+      <h2>⏳ Credit Period (party ke hisaab se)</h2>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Har party ke liye kitne din ka udhaar chalta hai, wo yahan bharein. Sales / Purchase Voucher me "Credit days" bharne par wo us Voucher ke liye is default ko badal deta hai.</div>
+      <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="creditPartyAll" onchange="renderCreditParties()" /> Sabhi ledgers dikhayein</label>
+      <div id="creditPartyWrap"></div>
+    </div>
+    <div class="card">
+      <h2>📊 Outstanding / Ageing <button class="btn-secondary btn-small" style="float:right;" onclick="printReportWrap('outReportWrap','Outstanding Ageing')">🖨️ Print</button></h2>
+      <div class="grid3">
+        <div class="field"><label>Report</label><select id="outKind" onchange="renderOutstanding()"><option value="recv">Receivable — grahak se lena hai</option><option value="pay">Payable — supplier ko dena hai</option></select></div>
+        <div class="field"><label>Is tareekh tak (As on)</label><input type="date" id="outAsOf" onchange="renderOutstanding()" /></div>
+        <div class="field"><label>&nbsp;</label><label style="font-size:13px; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="outOverdueOnly" onchange="renderOutstanding()" /> Sirf overdue dikhayein</label></div>
+      </div>
+      <div id="outReportWrap"></div>
+    </div>
+  </div>
+
   <div id="tab-gst" class="tab-content" style="display:none;">
     <div class="card">
       <h2>⚙️ GST Settings</h2>
@@ -678,6 +701,7 @@
             <option value="purchase">Purchase Register (ITC)</option>
             <option value="hsn">HSN Summary</option>
             <option value="rate">Rate-wise Summary</option>
+            <option value="itc180">180-din ITC alert (khareed ka bhugtan)</option>
           </select></div>
       </div>
       <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
@@ -688,6 +712,12 @@
         <button class="btn-secondary btn-small" onclick="setGstRange('all')">Sab</button>
       </div>
       <div id="gstReportWrap"></div>
+    </div>
+    <div class="card">
+      <h2>🔁 GSTR-2B se Milan (khareed ka ITC)</h2>
+      <div style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">GST portal se apna <b>GSTR-2B</b> (Excel .xlsx ya JSON) download karke yahan daalein. Ye aapki Purchase invoices (upar ke <b>From / To</b> ke bhitar) se supplier GSTIN aur invoice number par milaya jayega. Ek mahine ki 2B ho to From / To bhi usi mahine ke rakhein.</div>
+      <input type="file" id="gst2bFile" accept=".xlsx,.xls,.csv,.json" onchange="onGstr2bFile(this)" />
+      <div id="gst2bWrap" style="margin-top:12px;"></div>
     </div>
     <div class="card">
       <h3>ℹ️ Is app me kya hai aur kya nahi</h3>
@@ -1323,6 +1353,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='voucher') renderVoucherStockPanel();
     if(btn.dataset.tab==='inventory') renderInventory();
     if(btn.dataset.tab==='gst') renderGst();
+    if(btn.dataset.tab==='outstanding') renderOutstanding();
     if(btn.dataset.tab==='report'){ const _bb = document.getElementById('ledBackBtn'); if(_bb) _bb.style.display = 'none'; renderReport(); }
     if(btn.dataset.tab==='receipts') renderReceipts();
     if(btn.dataset.tab==='transactions') renderTransactions();
@@ -1336,8 +1367,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 // ===================== GST invoice: voucher entry =====================
-let vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[] };
-function resetVchGst(){ vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[] }; }
+let vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[], itc:'eligible', itcReason:'' };
+function resetVchGst(){ vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[], itc:'eligible', itcReason:'' }; }
 function gstVoucherAllowed(type){ return gstActive() && ['sales','purchase','credit_note','debit_note'].includes(type); }
 function refreshGstVoucherToggle(){
   const el = document.getElementById('voucherType'); if(!el) return;
@@ -1390,14 +1421,14 @@ function gstCompute(){
   const sum = k => r2(all.reduce((t,x)=>t + x[k], 0));
   const taxable = sum('taxable'), cgst = sum('cgst'), sgst = sum('sgst'), igst = sum('igst');
   const tax = r2(cgst + sgst + igst), total = r2(taxable + tax);
-  const lines = [], L = GST_LEDGERS, P = vchGst.party, T = vchGst.trade;
+  const lines = [], L = GST_LEDGERS, P = vchGst.party, T = vchGst.trade, blocked = (vchGst.itc === 'blocked');
   const push = (side, ledger, amt)=>{ if(amt > 0.0001 && ledger) lines.push({ side, ledger, amount: r2(amt) }); };
   const outTax = side=>{ push(side, L.outCgst, cgst); push(side, L.outSgst, sgst); push(side, L.outIgst, igst); };
   const inTax = side=>{ push(side, L.inCgst, cgst); push(side, L.inSgst, sgst); push(side, L.inIgst, igst); };
   if(type === 'sales'){ push('Dr', P, total); push('Cr', T, taxable); outTax('Cr'); }
   else if(type === 'credit_note'){ push('Dr', T, taxable); outTax('Dr'); push('Cr', P, total); }
-  else if(type === 'purchase'){ push('Dr', T, taxable); inTax('Dr'); if(vchGst.rcm){ push('Cr', P, taxable); outTax('Cr'); } else push('Cr', P, total); }
-  else if(type === 'debit_note'){ push('Dr', P, total); push('Cr', T, taxable); inTax('Cr'); }
+  else if(type === 'purchase'){ push('Dr', T, blocked ? total : taxable); if(!blocked) inTax('Dr'); if(vchGst.rcm){ push('Cr', P, taxable); outTax('Cr'); } else push('Cr', P, total); }
+  else if(type === 'debit_note'){ push('Dr', P, total); push('Cr', T, blocked ? total : taxable); if(!blocked) inTax('Cr'); }
   return { type, sup, intra, all, taxable, cgst, sgst, igst, tax, total, lines };
 }
 function gstRecalc(){
@@ -1454,6 +1485,15 @@ function renderGstPanel(){
         <div class="field"><label>Invoice Date</label><input type="date" id="gst_invdate" value="${vchGst.invDate || ''}" onchange="onGstField('invDate', this.value)" /></div>
         <div class="field">${type === 'purchase' ? `<label>&nbsp;</label><label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;"><input type="checkbox" id="gst_rcm" ${vchGst.rcm ? 'checked' : ''} onchange="onGstField('rcm', this.checked)" /> Reverse Charge (RCM)</label>` : ''}</div>
       </div>
+      ${(type === 'purchase' || type === 'debit_note') ? `<div class="grid3">
+        <div class="field"><label>ITC ki sthiti</label><select id="gst_itc" onchange="onGstField('itc', this.value)">
+          <option value="eligible" ${vchGst.itc === 'eligible' ? 'selected' : ''}>Eligible — ITC milega</option>
+          <option value="pending" ${vchGst.itc === 'pending' ? 'selected' : ''}>Rokha hua — GSTR-2B me abhi nahi dikha</option>
+          <option value="blocked" ${vchGst.itc === 'blocked' ? 'selected' : ''}>Blocked (Sec. 17(5)) — ITC nahi, tax kharch me</option>
+        </select></div>
+        <div class="field"><label>Karan / note (optional)</label><input id="gst_itcreason" value="${escapeHtml(vchGst.itcReason || '')}" oninput="onGstField('itcReason', this.value)" placeholder="jaise: staff ka khana, car..." /></div>
+        <div class="field"></div>
+      </div>` : ''}
       <div style="font-weight:700; margin:8px 0 4px; font-size:13px;">Aur kharch / service (freight, packing...) — taxable</div>
       ${vchGst.extras.length ? `<table><thead><tr><th style="text-align:left;">Vivaran</th><th>HSN/SAC</th><th>Taxable ₹</th><th>GST %</th><th></th></tr></thead><tbody>${extraRows}</tbody></table>` : ''}
       <button class="btn-secondary btn-small" style="margin-top:6px;" onclick="addGstExtra()">+ Charge / service line</button>
@@ -1521,6 +1561,7 @@ function gstBuildMeta(type, g){
     regType:'regular', party: vchGst.party, partyGstin: party.gstin || '', partyState: party.state || '',
     pos: g.sup.pos, supply: g.sup.type, entityState: g.sup.ent, entityGstin: trustDetails.gstin || '',
     trade: vchGst.trade, invNo: String(vchGst.invNo || '').trim(), invDate: vchGst.invDate || date, rcm: !!(type === 'purchase' && vchGst.rcm),
+    itc: (type === 'purchase' || type === 'debit_note') ? (vchGst.itc || 'eligible') : '', itcReason: (vchGst.itcReason || '').trim(),
     items: g.all.map(x=>({ kind:x.kind, itemId:x.itemId || '', name:x.name, hsn:x.hsn, unit:x.unit, qty:x.qty, rate:x.rate, taxable:x.taxable, gst:x.gst, cgst:x.cgst, sgst:x.sgst, igst:x.igst })),
     extrasRaw: vchGst.extras.map(e=>({ desc:e.desc, hsn:e.hsn, amount:e.amount, gst:e.gst })),
     taxable: g.taxable, cgst: g.cgst, sgst: g.sgst, igst: g.igst, tax: g.tax, total: g.total
@@ -1633,7 +1674,7 @@ function resetMultiForm(){
   const keepGst = vchGst.on ? { trade: vchGst.trade } : null;
   vchLines = [{ side:'Dr', ledger:'', amount:'' }, { side:'Cr', ledger:'', amount:'' }];
   editingMultiId = null; hideMultiBanner();
-  ['vch_ref','vch_note'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
+  ['vch_ref','vch_note','vch_credit'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
   if(document.getElementById('vch_activity')) document.getElementById('vch_activity').value = '';
   if(document.getElementById('vch_receipt_name')) document.getElementById('vch_receipt_name').value = '';
   document.getElementById('vch_date').value = todayStr();
@@ -1690,6 +1731,7 @@ async function saveMultiVoucher(makeReceipt){
     if(v.voucherType === 'receipt') v.receiptName = receiptName;
     if(stockLines.length) v.stockLines = stockLines; else delete v.stockLines;
     if(gstMeta) v.gst = gstMeta; else delete v.gst;
+    { const cd = (document.getElementById('vch_credit') || {}).value; if(cd !== undefined && cd !== '') v.creditDays = Math.max(0, Math.floor(Number(cd) || 0)); else delete v.creditDays; }
     vchNo = v.voucherNo;
     await persistVouchers();
   } else {
@@ -1703,6 +1745,7 @@ async function saveMultiVoucher(makeReceipt){
     };
     if(stockLines.length) v.stockLines = stockLines;
     if(gstMeta) v.gst = gstMeta;
+    { const cd = (document.getElementById('vch_credit') || {}).value; if(cd !== undefined && cd !== '') v.creditDays = Math.max(0, Math.floor(Number(cd) || 0)); }
     vouchers.push(v);
     await persistVouchers();
     await persistVoucherCounters();
@@ -1725,11 +1768,12 @@ function editMultiVoucher(id){
   document.getElementById('vch_date').value = v.date;
   document.getElementById('vch_ref').value = v.ref || '';
   document.getElementById('vch_note').value = v.note || '';
+  if(document.getElementById('vch_credit')) document.getElementById('vch_credit').value = (v.creditDays === undefined || v.creditDays === null) ? '' : v.creditDays;
   if(document.getElementById('vch_activity')) document.getElementById('vch_activity').value = v.activity || '';
   if(document.getElementById('vch_receipt_name')) document.getElementById('vch_receipt_name').value = v.receiptName || '';
   vchStockLines = (v.stockLines || []).map(l=>({ itemId:l.itemId, qty:String(l.qty), rate:String(l.rate), gst:(l.gst === undefined || l.gst === null) ? '' : String(l.gst) }));
   if(v.gst){
-    vchGst = { on:true, party:v.gst.party, pos:v.gst.pos, trade:v.gst.trade, invNo:v.gst.invNo || '', invDate:v.gst.invDate || v.date, rcm:!!v.gst.rcm, extras:(v.gst.extrasRaw || []).map(e=>({ ...e })) };
+    vchGst = { on:true, party:v.gst.party, pos:v.gst.pos, trade:v.gst.trade, invNo:v.gst.invNo || '', invDate:v.gst.invDate || v.date, rcm:!!v.gst.rcm, extras:(v.gst.extrasRaw || []).map(e=>({ ...e })), itc:v.gst.itc || 'eligible', itcReason:v.gst.itcReason || '' };
     document.getElementById('vch_gst').checked = true; document.getElementById('vch_multi').disabled = true;
     renderGstPanel();
   }
@@ -1738,6 +1782,111 @@ function editMultiVoucher(id){
   b.innerHTML = `✏️ <b>${escapeHtml(v.voucherNo)}</b> edit ho raha hai — Save dabane par isi voucher me badlav hoga. <button class="delete-btn" style="margin-left:8px;" onclick="cancelMultiEdit()">Edit radd karein</button>`;
   applyMultiMode(); renderVoucherStockPanel();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===================== Credit period + Outstanding / Ageing =====================
+function partyGroupOf(name){ const l = ledgerMaster.find(x=>x.name === name); return l ? l.group : ''; }
+function partyCreditDays(name){
+  const l = ledgerMaster.find(x=>x.name === name);
+  return (l && l.creditDays !== undefined && l.creditDays !== null && l.creditDays !== '') ? Number(l.creditDays) : null;
+}
+function addDays(iso, n){ const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return ymdLocal(d); }
+function daysBetween(a, b){ return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000); }
+// Party ke bills (FIFO: pehle ke bill pehle chukte maane jate hain)
+function billsOf(party, asOf){
+  const grp = partyGroupOf(party), recv = (grp === 'Sundry Debtors');
+  if(!recv && grp !== 'Sundry Creditors') return { bills:[], advance:0, recv:false };
+  const vmap = {}; vouchers.forEach(v=>{ vmap[v.id] = v; });
+  const bills = []; let settle = 0;
+  const op = ledgerOpeningOf(party);
+  if(op > 0.004) bills.push({ id:'__open__', date:'', voucherNo:'Opening', amount:r2(op), opening:true, ref:'' });
+  getAllLedgerEffects(party).forEach(e=>{
+    if(asOf && e.date > asOf) return;
+    const vid = e.id.slice(0, -2), v = vmap[vid];
+    const invAmt = recv ? e.debit : e.credit, setAmt = recv ? e.credit : e.debit;
+    if(invAmt > 0.004) bills.push({ id:vid, date:e.date, voucherNo:e.voucherNo, amount:r2(invAmt), v, ref:e.ref || '' });
+    if(setAmt > 0.004) settle += setAmt;
+  });
+  bills.sort((a,b)=> (b.opening ? 1 : 0) - (a.opening ? 1 : 0) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  let rem = r2(settle);
+  bills.forEach(b=>{ const pd = Math.min(b.amount, rem); b.paid = r2(pd); b.outstanding = r2(b.amount - pd); rem = r2(rem - pd); });
+  return { bills, advance: r2(rem), recv };
+}
+function billDue(b, party){
+  if(b.opening || !b.date) return null;
+  const v = b.v;
+  const days = (v && v.creditDays !== undefined && v.creditDays !== null && v.creditDays !== '') ? Number(v.creditDays) : partyCreditDays(party);
+  return days === null ? null : addDays(b.date, days);
+}
+function renderCreditParties(){
+  const wrap = document.getElementById('creditPartyWrap'); if(!wrap) return;
+  const all = document.getElementById('creditPartyAll') && document.getElementById('creditPartyAll').checked;
+  const list = ledgerMaster.filter(l=> all || l.group === 'Sundry Debtors' || l.group === 'Sundry Creditors').sort((a,b)=>a.name.localeCompare(b.name));
+  if(!list.length){ wrap.innerHTML = '<div class="empty">Groups tab me Sundry Debtors / Creditors ke under ledger banayein</div>'; return; }
+  wrap.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th style="text-align:left;">Party</th><th style="text-align:left;">Group</th><th>Credit days</th></tr></thead><tbody>` +
+    list.map(l=>`<tr><td style="text-align:left;"><b>${escapeHtml(l.name)}</b></td><td style="text-align:left;">${escapeHtml(l.group || '')}</td>
+      <td><input type="number" min="0" step="1" value="${l.creditDays === undefined || l.creditDays === null ? '' : l.creditDays}" placeholder="din" style="padding:4px; width:90px;" onchange="saveCreditDays('${l.id}', this.value)" /></td></tr>`).join('') + '</tbody></table></div>';
+}
+async function saveCreditDays(id, val){
+  const l = ledgerMaster.find(x=>x.id === id); if(!l) return;
+  if(val === '' || val === null) delete l.creditDays; else l.creditDays = Math.max(0, Math.floor(Number(val) || 0));
+  await persistLedgerMaster();
+  renderOutstanding();
+}
+async function setBillCreditDays(vid, val){
+  const v = vouchers.find(x=>x.id === vid); if(!v) return;
+  if(val === '' || val === null) delete v.creditDays; else v.creditDays = Math.max(0, Math.floor(Number(val) || 0));
+  await persistVouchers();
+  renderOutstanding();
+}
+const OUT_OPEN = new Set();
+function toggleOut(name){ if(OUT_OPEN.has(name)) OUT_OPEN.delete(name); else OUT_OPEN.add(name); renderOutstanding(); }
+function outstandingData(kind, asOf, overdueOnly){
+  const grp = kind === 'recv' ? 'Sundry Debtors' : 'Sundry Creditors';
+  const rows = [], tot = { total:0, noDue:0, notDue:0, b1:0, b2:0, b3:0, b4:0, advance:0 };
+  ledgerMaster.filter(l=>l.group === grp).sort((a,b)=>a.name.localeCompare(b.name)).forEach(l=>{
+    const r = billsOf(l.name, asOf), open = r.bills.filter(b=>b.outstanding > 0.004);
+    const party = { name:l.name, total:0, noDue:0, notDue:0, b1:0, b2:0, b3:0, b4:0, advance:r.advance, bills:[] };
+    open.forEach(b=>{
+      const due = billDue(b, l.name);
+      let od = null; if(due){ od = daysBetween(due, asOf); }
+      const bucket = due === null ? 'noDue' : (od <= 0 ? 'notDue' : od <= 30 ? 'b1' : od <= 60 ? 'b2' : od <= 90 ? 'b3' : 'b4');
+      if(overdueOnly && !(od !== null && od > 0)) return;
+      party.total += b.outstanding; party[bucket] += b.outstanding;
+      party.bills.push(Object.assign({}, b, { due, overdue: od, age: b.date ? daysBetween(b.date, asOf) : null, bucket }));
+    });
+    if(party.bills.length || (!overdueOnly && Math.abs(r.advance) > 0.004)){
+      ['total','noDue','notDue','b1','b2','b3','b4'].forEach(k=>{ party[k] = r2(party[k]); tot[k] += party[k]; });
+      tot.advance += party.advance; rows.push(party);
+    }
+  });
+  Object.keys(tot).forEach(k=>{ tot[k] = r2(tot[k]); });
+  return { rows, tot };
+}
+function renderOutstanding(){
+  renderCreditParties();
+  const wrap = document.getElementById('outReportWrap'); if(!wrap) return;
+  const asEl = document.getElementById('outAsOf'); if(asEl && !asEl.value) asEl.value = todayStr();
+  const asOf = asEl.value || todayStr(), kind = document.getElementById('outKind').value, only = document.getElementById('outOverdueOnly').checked;
+  const d = outstandingData(kind, asOf, only), hdr = getTrustHeaderHtml();
+  const money = n => n ? fmtPlain(n) : '';
+  const body = d.rows.map(p=>{
+    const open = OUT_OPEN.has(p.name);
+    const head = `<tr class="bs-g"><td style="text-align:left;"><span class="bs-arrow" style="cursor:pointer;" onclick="toggleOut(${JSON.stringify(p.name).replace(/"/g,'&quot;')})">${p.bills.length ? (open ? '▼' : '▶') : ''}</span> <a class="bs-link" data-ledger="${escapeHtml(p.name)}" title="Ledger kholein">${escapeHtml(p.name)}</a>${p.advance > 0.004 ? ` <span style="font-weight:400; font-size:11px; color:#166534;">(advance ₹${fmtPlain(p.advance)})</span>` : ''}</td>
+      <td class="amt">${fmtPlain(p.total)}</td><td class="amt">${money(p.notDue)}</td><td class="amt">${money(p.b1)}</td><td class="amt">${money(p.b2)}</td><td class="amt">${money(p.b3)}</td><td class="amt" style="color:#b91c1c;">${money(p.b4)}</td><td class="amt">${money(p.noDue)}</td></tr>`;
+    const bills = open ? p.bills.map(b=>`<tr class="bs-leaf"><td style="padding-left:34px; text-align:left;">${b.opening ? 'Opening Balance' : fmtDT(b.date) + ' · ' + escapeHtml(b.voucherNo || '') + (b.ref ? ' · ' + escapeHtml(b.ref) : '')}
+        <span style="font-size:11px; color:#6b7280;">${b.age !== null ? ' · ' + b.age + ' din purana' : ''}${b.due ? ' · due ' + fmtDT(b.due) : ''}${b.overdue > 0 ? ' · <b style="color:#b91c1c;">' + b.overdue + ' din overdue</b>' : ''}</span>
+        ${b.opening ? '' : `<span style="float:right;">credit days <input type="number" min="0" style="width:60px; padding:2px;" value="${b.v && b.v.creditDays !== undefined ? b.v.creditDays : ''}" placeholder="${partyCreditDays(p.name) === null ? '—' : partyCreditDays(p.name)}" onchange="setBillCreditDays('${b.id}', this.value)" /></span>`}</td>
+        <td class="amt">${fmtPlain(b.outstanding)}${b.paid > 0 ? `<div style="font-size:10.5px; color:#6b7280;">(bill ${fmtPlain(b.amount)}, chuka ${fmtPlain(b.paid)})</div>` : ''}</td>
+        <td class="amt">${b.bucket === 'notDue' ? fmtPlain(b.outstanding) : ''}</td><td class="amt">${b.bucket === 'b1' ? fmtPlain(b.outstanding) : ''}</td><td class="amt">${b.bucket === 'b2' ? fmtPlain(b.outstanding) : ''}</td><td class="amt">${b.bucket === 'b3' ? fmtPlain(b.outstanding) : ''}</td><td class="amt">${b.bucket === 'b4' ? fmtPlain(b.outstanding) : ''}</td><td class="amt">${b.bucket === 'noDue' ? fmtPlain(b.outstanding) : ''}</td></tr>`).join('') : '';
+    return head + bills;
+  }).join('');
+  wrap.innerHTML = `<div style="text-align:center; margin-bottom:10px;"><h3 style="margin:0 0 3px; color:#0b5539;">${escapeHtml(hdr.name)}</h3>
+      <div style="font-size:12px; color:#666;">${kind === 'recv' ? 'Receivable (grahak se lena)' : 'Payable (supplier ko dena)'} — Ageing as on ${fmtDT(asOf)}${only ? ' — sirf overdue' : ''}</div></div>
+    <div style="overflow-x:auto;"><table class="bs-table"><thead><tr><th style="text-align:left;">Party / Bill</th><th class="right-h">Baaki (₹)</th><th class="right-h">Due nahi aaya</th><th class="right-h">1–30 din overdue</th><th class="right-h">31–60</th><th class="right-h">61–90</th><th class="right-h">90+ din</th><th class="right-h">Credit period tay nahi</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="8" class="empty">Koi baaki bill nahi</td></tr>'}
+      <tr class="total-row"><td>KUL</td><td class="amt">${fmtPlain(d.tot.total)}</td><td class="amt">${fmtPlain(d.tot.notDue)}</td><td class="amt">${fmtPlain(d.tot.b1)}</td><td class="amt">${fmtPlain(d.tot.b2)}</td><td class="amt">${fmtPlain(d.tot.b3)}</td><td class="amt">${fmtPlain(d.tot.b4)}</td><td class="amt">${fmtPlain(d.tot.noDue)}</td></tr></tbody></table></div>
+    <div style="font-size:11.5px; color:var(--muted); margin-top:8px;">Bhugtan purane bill se chukta maana jata hai (FIFO). Credit days Voucher me bhare ho to wahi, nahi to party ka default lagta hai. Ledger ke naam par click karne se uska Ledger khulta hai; ▶ par click karne se bill-wise suchi.</div>`;
 }
 
 // ===================== GST: helpers, settings, party details =====================
@@ -1883,7 +2032,7 @@ async function saveParty(id, field, val){
   await persistLedgerMaster();
   const m = document.getElementById('pg_m_' + id); if(m) m.innerHTML = partyGstMsg(l);
 }
-function renderGst(){ renderGstSettings(); renderGstParties(); renderGstReport(); }
+function renderGst(){ renderGstSettings(); renderGstParties(); renderGstReport(); renderGst2b(); }
 // ===================== GST: Tax Invoice print =====================
 function gstStateLabel(c){ return c ? c + ' - ' + (GST_STATES[c] || '') : '—'; }
 function printGstInvoice(id){
@@ -1936,6 +2085,109 @@ function printGstInvoice(id){
   w.document.close();
 }
 
+// ===================== GSTR-2B milan =====================
+let GST2B = { rows:null, name:'', result:null };
+function norm2bInv(x){ return String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, ''); }
+function iso2b(x){
+  if(!x) return '';
+  if(x instanceof Date) return ymdLocal(x);
+  const t = String(x).trim(); let m;
+  if((m = t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/))) return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+  if((m = t.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1] + '-' + m[2] + '-' + m[3];
+  const n = Number(t); if(!isNaN(n) && n > 20000){ return new Date(Math.round((n - 25569) * 86400000)).toISOString().slice(0,10); }
+  const d = new Date(t); return isNaN(d) ? '' : ymdLocal(d);
+}
+function num2b(x){ if(typeof x === 'number') return x; const n = parseFloat(String(x || '').replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function parse2bJson(j){
+  const root = j.data || j, b2b = ((root.docdata || {}).b2b) || root.b2b || [], rows = [];
+  b2b.forEach(sup=> (sup.inv || []).forEach(inv=>{
+    let t = 0, i = 0, c = 0, s2 = 0;
+    (inv.items || []).forEach(it=>{ t += num2b(it.txval); i += num2b(it.igst); c += num2b(it.cgst); s2 += num2b(it.sgst); });
+    rows.push({ gstin:String(sup.ctin || '').toUpperCase(), name:sup.trdnm || '', inv:inv.inum || '', date:iso2b(inv.dt), value:num2b(inv.val), taxable:t, igst:i, cgst:c, sgst:s2, rcm: inv.rev === 'Y', itcAvl: inv.itcavl || '', reason: inv.rsn || '' });
+  }));
+  return rows;
+}
+function parse2bSheet(buf){
+  if(typeof XLSX === 'undefined') throw new Error('Excel library load nahi hui');
+  const wb = XLSX.read(buf, { type:'array', cellDates:true });
+  const name = wb.SheetNames.find(n=>/^b2b$/i.test(n.trim())) || wb.SheetNames.find(n=>/b2b/i.test(n) && !/b2ba/i.test(n)) || wb.SheetNames[0];
+  const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:true, defval:'' });
+  let h = -1;
+  for(let i = 0; i < aoa.length; i++){ const r = aoa[i].map(x=>String(x)); if(r.some(c=>/gstin of supplier/i.test(c)) && r.some(c=>/invoice number/i.test(c))){ h = i; break; } }
+  if(h < 0) throw new Error('Sheet me "GSTIN of supplier" aur "Invoice number" wali header-pankti nahi mili (sheet: ' + name + ')');
+  const hdr = aoa[h].map(x=>String(x).trim()), col = re => hdr.findIndex(c=>re.test(c));
+  const ix = { gstin:col(/gstin of supplier/i), name:col(/trade|legal name/i), inv:col(/invoice number/i), date:col(/invoice date/i), value:col(/invoice value/i), rcm:col(/reverse charge/i), taxable:col(/taxable value/i), igst:col(/integrated tax/i), cgst:col(/central tax/i), sgst:col(/state\/?ut tax|state tax/i), avl:col(/itc availability/i), reason:col(/^reason/i) };
+  const rows = [];
+  for(let i = h + 1; i < aoa.length; i++){
+    const r = aoa[i], g = String(r[ix.gstin] || '').trim().toUpperCase();
+    if(!/^[0-9A-Z]{15}$/.test(g)) continue;
+    rows.push({ gstin:g, name:String(ix.name >= 0 ? r[ix.name] : ''), inv:String(r[ix.inv] || '').trim(), date:iso2b(r[ix.date]), value:num2b(r[ix.value]), taxable:num2b(r[ix.taxable]), igst:num2b(r[ix.igst]), cgst:num2b(r[ix.cgst]), sgst:num2b(r[ix.sgst]), rcm:/^y/i.test(String(ix.rcm >= 0 ? r[ix.rcm] : '')), itcAvl:String(ix.avl >= 0 ? r[ix.avl] : '').trim(), reason:String(ix.reason >= 0 ? r[ix.reason] : '') });
+  }
+  return rows;
+}
+async function onGstr2bFile(inp){
+  const f = inp.files && inp.files[0]; if(!f) return;
+  try{
+    const nm = f.name.toLowerCase();
+    GST2B.rows = nm.endsWith('.json') ? parse2bJson(JSON.parse(await f.text())) : parse2bSheet(await f.arrayBuffer());
+    GST2B.name = f.name;
+    if(!GST2B.rows.length) toast('File me koi B2B invoice nahi mila');
+    renderGst2b();
+  }catch(e){ console.error(e); alert('GSTR-2B file padhi nahi ja saki: ' + (e.message || e)); }
+}
+function gst2bAggregate(rows){
+  const m = {};
+  rows.forEach(r=>{
+    const k = r.gstin + '|' + norm2bInv(r.inv), o = m[k] = m[k] || { gstin:r.gstin, name:r.name, inv:r.inv, date:r.date, value:r.value, taxable:0, igst:0, cgst:0, sgst:0, rcm:r.rcm, itcAvl:r.itcAvl, reason:r.reason };
+    o.taxable += r.taxable; o.igst += r.igst; o.cgst += r.cgst; o.sgst += r.sgst;
+  });
+  Object.values(m).forEach(o=>{ o.taxable = r2(o.taxable); o.tax = r2(o.igst + o.cgst + o.sgst); });
+  return m;
+}
+function gst2bReconcile(){
+  if(!GST2B.rows) return null;
+  const from = (document.getElementById('gstFrom') || {}).value || '', to = (document.getElementById('gstTo') || {}).value || '';
+  const agg = gst2bAggregate(GST2B.rows);
+  const purchases = vouchers.filter(v=>!v.cancelled && v.gst && v.voucherType === 'purchase' && !v.gst.rcm);
+  const allKeys = new Set(purchases.map(v=> (v.gst.partyGstin || '') + '|' + norm2bInv(v.gst.invNo)));
+  const inRange = purchases.filter(v=>{ const d = v.gst.invDate || v.date; return (!from || d >= from) && (!to || d <= to); });
+  const res = { matched:[], mismatch:[], onlyBooks:[], only2b:[] };
+  inRange.forEach(v=>{
+    const g = v.gst, key = (g.partyGstin || '') + '|' + norm2bInv(g.invNo), b = (g.partyGstin && g.invNo) ? agg[key] : null;
+    if(b){ const dT = r2(g.taxable - b.taxable), dX = r2(g.tax - b.tax); if(Math.abs(dT) <= 1 && Math.abs(dX) <= 1) res.matched.push({ v, g, b }); else res.mismatch.push({ v, g, b, dT, dX }); }
+    else res.onlyBooks.push({ v, g });
+  });
+  Object.keys(agg).forEach(k=>{ if(!allKeys.has(k)) res.only2b.push(agg[k]); });
+  return res;
+}
+function renderGst2b(){
+  const wrap = document.getElementById('gst2bWrap'); if(!wrap) return;
+  if(!GST2B.rows){ wrap.innerHTML = '<div class="empty" style="padding:8px 0;">File chunein</div>'; return; }
+  const r = GST2B.result = gst2bReconcile();
+  const st = x=> ({ eligible:'Eligible', pending:'Rokha', blocked:'Blocked' })[x.itc || 'eligible'];
+  const T = [];
+  T.push({ name:`Mil gaye (${r.matched.length})`, head:['Date','Supplier','GSTIN','Invoice','Taxable','Tax','Books me ITC','2B me ITC'], rows:r.matched.map(({v,g,b})=>[g.invDate || v.date, g.party, g.partyGstin, g.invNo, g.taxable, g.tax, st(g), b.itcAvl || '']) });
+  T.push({ name:`Rakam alag hai (${r.mismatch.length})`, head:['Date','Supplier','Invoice','Books taxable','2B taxable','Taxable antar','Books tax','2B tax','Tax antar'], rows:r.mismatch.map(({v,g,b,dT,dX})=>[g.invDate || v.date, g.party, g.invNo, g.taxable, b.taxable, dT, g.tax, b.tax, dX]) });
+  T.push({ name:`Books me hai, 2B me nahi (${r.onlyBooks.length}) — supplier se follow-up / ITC rokhein`, head:['Date','Supplier','GSTIN','Invoice','Taxable','Tax','ITC sthiti','Note'], rows:r.onlyBooks.map(({v,g})=>[g.invDate || v.date, g.party, g.partyGstin || '', g.invNo, g.taxable, g.tax, st(g), g.partyGstin ? '2B me nahi dikha' : 'GSTIN nahi — milan nahi ho sakta']) });
+  T.push({ name:`2B me hai, books me nahi (${r.only2b.length}) — books me entry karein`, head:['Date','Supplier','GSTIN','Invoice','Taxable','Tax','2B me ITC','Karan'], rows:r.only2b.map(o=>[o.date, o.name, o.gstin, o.inv, o.taxable, o.tax, o.itcAvl || '', o.reason || '']) });
+  wrap.innerHTML = `<div style="font-size:12.5px; margin-bottom:6px;">File: <b>${escapeHtml(GST2B.name)}</b> — ${GST2B.rows.length} line · ${Object.keys(gst2bAggregate(GST2B.rows)).length} invoice</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+      <button class="btn-secondary btn-small" onclick="gst2bApply('match')">✅ Mile hue invoice ka ITC "Eligible" karein</button>
+      <button class="btn-secondary btn-small" onclick="gst2bApply('hold')">⏸️ 2B me na dikhe invoice ka ITC "Rokha hua" karein</button>
+    </div>
+    <div style="font-size:11.5px; color:var(--muted);">Blocked (17(5)) wali khareed ka status ye buttons nahi badalte. Milan GSTIN + invoice number (zero / space / chinh hata kar) par hota hai; rakam ka antar ₹1 tak chalta hai.</div>
+    ${T.map(gstTableHtml).join('')}`;
+}
+async function gst2bApply(kind){
+  const r = GST2B.result; if(!r) return;
+  const list = kind === 'match' ? r.matched : r.onlyBooks.filter(x=>x.g.partyGstin);
+  let n = 0;
+  list.forEach(({ g })=>{ if((g.itc || 'eligible') === 'blocked') return; const ns = kind === 'match' ? 'eligible' : 'pending'; if((g.itc || 'eligible') !== ns){ g.itc = ns; n++; } });
+  if(n) await persistVouchers();
+  toast(n + ' invoice ka ITC status badla');
+  renderGst2b(); renderGstReport();
+}
+
 // ===================== GST: reports =====================
 function setGstRange(kind){
   const now = new Date(); let from = '', to = '';
@@ -1959,29 +2211,50 @@ function gstSetoff(liab, itc){
   use('sgst','sgst'); use('sgst','igst');
   return { cash:L, carry:C, util };
 }
+// 180 din ka niyam: supplier ko 180 din me bhugtan nahi hua to ITC ulta hota hai, bhugtan par dobara milta hai
+function gstItcReversalAsOf(D){
+  const res = { igst:0, cgst:0, sgst:0 }; if(!D) return res;
+  const cache = {};
+  vouchers.forEach(v=>{
+    if(v.cancelled || !v.gst || v.voucherType !== 'purchase' || v.gst.rcm) return;
+    if((v.gst.itc || 'eligible') !== 'eligible') return;
+    const deadline = addDays(v.gst.invDate || v.date, 180);
+    if(deadline >= D) return;
+    const key = v.gst.party + '|' + D, bl = cache[key] || (cache[key] = billsOf(v.gst.party, D));
+    const b = bl.bills.find(x=>x.id === v.id); if(!b || !(b.amount > 0)) return;
+    const frac = b.outstanding / b.amount; if(frac <= 0.0005) return;
+    ['igst','cgst','sgst'].forEach(k=>{ res[k] += r2(v.gst[k] * frac); });
+  });
+  ['igst','cgst','sgst'].forEach(k=>{ res[k] = r2(res[k]); });
+  return res;
+}
 function gstCompute3B(from, to){
-  const A = { out:{ t:0, igst:0, cgst:0, sgst:0 }, nil:0, rcm:{ t:0, igst:0, cgst:0, sgst:0 }, itcP:{ igst:0, cgst:0, sgst:0 }, itcR:{ igst:0, cgst:0, sgst:0 }, itcD:{ igst:0, cgst:0, sgst:0 } };
+  const Z = ()=>({ igst:0, cgst:0, sgst:0 });
+  const A = { out:{ t:0, igst:0, cgst:0, sgst:0 }, nil:0, rcm:{ t:0, igst:0, cgst:0, sgst:0 }, itcP:Z(), itcR:Z(), itcD:Z(), pend:Z(), blk:Z() };
   gstDocs(from, to).forEach(v=>{
-    const sg = GST_SIGN[v.voucherType] || 0, g = v.gst;
+    const sg = GST_SIGN[v.voucherType] || 0, g = v.gst, st = g.itc || 'eligible';
     if(GST_OUT_TYPES.includes(v.voucherType)){
       g.items.forEach(x=>{
         if(!x.gst) A.nil += sg * x.taxable;
         else { A.out.t += sg * x.taxable; A.out.igst += sg * x.igst; A.out.cgst += sg * x.cgst; A.out.sgst += sg * x.sgst; }
       });
     } else if(v.voucherType === 'purchase'){
-      if(g.rcm){ A.rcm.t += g.taxable; ['igst','cgst','sgst'].forEach(k=>{ A.rcm[k] += g[k]; A.itcR[k] += g[k]; }); }
-      else ['igst','cgst','sgst'].forEach(k=>{ A.itcP[k] += g[k]; });
-    } else if(v.voucherType === 'debit_note'){
+      const bucket = st === 'eligible' ? (g.rcm ? A.itcR : A.itcP) : (st === 'pending' ? A.pend : A.blk);
+      if(g.rcm){ A.rcm.t += g.taxable; ['igst','cgst','sgst'].forEach(k=>{ A.rcm[k] += g[k]; }); }
+      ['igst','cgst','sgst'].forEach(k=>{ bucket[k] += g[k]; });
+    } else if(v.voucherType === 'debit_note' && st === 'eligible'){
       ['igst','cgst','sgst'].forEach(k=>{ A.itcD[k] += g[k]; });
     }
   });
   const op = gstSettings.openingItc;
-  const itc = { igst:r2(op.igst + A.itcP.igst + A.itcR.igst - A.itcD.igst), cgst:r2(op.cgst + A.itcP.cgst + A.itcR.cgst - A.itcD.cgst), sgst:r2(op.sgst + A.itcP.sgst + A.itcR.sgst - A.itcD.sgst) };
+  const rEnd = gstItcReversalAsOf(to || todayStr()), rBefore = from ? gstItcReversalAsOf(addDays(from, -1)) : { igst:0, cgst:0, sgst:0 };
+  const rev = { igst:r2(rEnd.igst - rBefore.igst), cgst:r2(rEnd.cgst - rBefore.cgst), sgst:r2(rEnd.sgst - rBefore.sgst) };
+  const itc = {}; ['igst','cgst','sgst'].forEach(k=>{ itc[k] = r2(op[k] + A.itcP[k] + A.itcR[k] - A.itcD[k] - rev[k]); });
   const liab = { igst:r2(A.out.igst), cgst:r2(A.out.cgst), sgst:r2(A.out.sgst) };
   const so = gstSetoff(liab, itc);
   const cashRcm = { igst:r2(A.rcm.igst), cgst:r2(A.rcm.cgst), sgst:r2(A.rcm.sgst) };
   const cashTotal = { igst:r2(so.cash.igst + cashRcm.igst), cgst:r2(so.cash.cgst + cashRcm.cgst), sgst:r2(so.cash.sgst + cashRcm.sgst) };
-  return { A, op, itc, liab, so, cashRcm, cashTotal };
+  return { A, op, itc, liab, so, cashRcm, cashTotal, rev };
 }
 function gstTables(from, to){
   const tables = [];
@@ -2000,29 +2273,47 @@ function gstTables(from, to){
   }
   if(rt === 'summary'){
     const R = gstCompute3B(from, to), A = R.A, tt = o=> r2(o.igst + o.cgst + o.sgst);
-    const num = (a,b,c)=> [a,b,c,r2(a+b+c)];
+    const neg = o=> ({ igst:-o.igst, cgst:-o.cgst, sgst:-o.sgst });
+    const row = (label, t, o)=> [label, t, o.igst, o.cgst, o.sgst, tt(o)];
     tables.push({ name:'Summary (GSTR-3B jaisa)', head:['Vivaran','Taxable value','IGST','CGST','SGST','Kul tax'], rows:[
       { section:'3.1 Outward supplies aur reverse charge wali inward supplies' },
-      ['3.1(a) Taxable outward supplies (credit note ghata kar)', r2(A.out.t), r2(A.out.igst), r2(A.out.cgst), r2(A.out.sgst), tt(A.out)],
+      row('3.1(a) Taxable outward supplies (credit note ghata kar)', r2(A.out.t), A.out),
       ['3.1(c) Nil-rated / exempt outward (0%)', r2(A.nil), '', '', '', ''],
-      ['3.1(d) Inward supplies — Reverse Charge', r2(A.rcm.t), r2(A.rcm.igst), r2(A.rcm.cgst), r2(A.rcm.sgst), tt(A.rcm)],
+      row('3.1(d) Inward supplies — Reverse Charge', r2(A.rcm.t), A.rcm),
       { section:'4. Input Tax Credit (ITC)' },
-      ['Pichle mahine se bacha ITC (opening)', '', R.op.igst, R.op.cgst, R.op.sgst, r2(R.op.igst + R.op.cgst + R.op.sgst)],
-      ['4(A)(5) Purchase par ITC', '', r2(A.itcP.igst), r2(A.itcP.cgst), r2(A.itcP.sgst), tt(A.itcP)],
-      ['4(A)(3) Reverse Charge par ITC', '', r2(A.itcR.igst), r2(A.itcR.cgst), r2(A.itcR.sgst), tt(A.itcR)],
-      ['4(B) ITC ghata — Debit Note (kharid wapsi)', '', -r2(A.itcD.igst), -r2(A.itcD.cgst), -r2(A.itcD.sgst), -tt(A.itcD)],
-      ['Kul ITC available', '', R.itc.igst, R.itc.cgst, R.itc.sgst, r2(R.itc.igst + R.itc.cgst + R.itc.sgst)],
+      row('Pichle mahine se bacha ITC (opening)', '', R.op),
+      row('4(A)(5) Purchase par ITC (sirf "Eligible")', '', A.itcP),
+      row('4(A)(3) Reverse Charge par ITC (sirf "Eligible")', '', A.itcR),
+      row('4(B)(2) ITC ghata — Debit Note (kharid wapsi)', '', neg(A.itcD)),
+      row('4(B)(2) 180 din me bhugtan nahi — ITC ulta (−) / dobara liya (+)', '', neg(R.rev)),
+      row('Kul ITC available', '', R.itc),
+      row('   (jod nahi) ITC rokha hua — GSTR-2B me nahi dikha', '', A.pend),
+      row('   (jod nahi) ITC blocked (17(5)) — kharch me gaya', '', A.blk),
       { section:'6.1 Tax ka bhugtan (set-off)' },
-      ['Output tax dayitva (outward supplies par)', '', R.liab.igst, R.liab.cgst, R.liab.sgst, r2(R.liab.igst + R.liab.cgst + R.liab.sgst)],
+      row('Output tax dayitva (outward supplies par)', '', R.liab),
       ['  IGST credit se kata (pehle IGST, phir CGST, phir SGST)', '', R.so.util.igst.igst, R.so.util.igst.cgst, R.so.util.igst.sgst, r2(R.so.util.igst.igst + R.so.util.igst.cgst + R.so.util.igst.sgst)],
       ['  CGST credit se kata (pehle CGST, phir IGST)', '', R.so.util.cgst.igst, R.so.util.cgst.cgst, '', r2(R.so.util.cgst.igst + R.so.util.cgst.cgst)],
       ['  SGST credit se kata (pehle SGST, phir IGST)', '', R.so.util.sgst.igst, '', R.so.util.sgst.sgst, r2(R.so.util.sgst.igst + R.so.util.sgst.sgst)],
-      ['Cash se bharna — outward tax ka bacha hua', '', R.so.cash.igst, R.so.cash.cgst, R.so.cash.sgst, r2(R.so.cash.igst + R.so.cash.cgst + R.so.cash.sgst)],
-      ['Cash se bharna — Reverse Charge tax (ITC se nahi kat sakta)', '', R.cashRcm.igst, R.cashRcm.cgst, R.cashRcm.sgst, r2(R.cashRcm.igst + R.cashRcm.cgst + R.cashRcm.sgst)],
-      ['KUL CASH PAYABLE', '', R.cashTotal.igst, R.cashTotal.cgst, R.cashTotal.sgst, r2(R.cashTotal.igst + R.cashTotal.cgst + R.cashTotal.sgst)],
-      ['ITC ka bacha hua balance (aage ke liye)', '', R.so.carry.igst, R.so.carry.cgst, R.so.carry.sgst, r2(R.so.carry.igst + R.so.carry.cgst + R.so.carry.sgst)]
-    ], boldRows:[9, 17, 18] });
+      row('Cash se bharna — outward tax ka bacha hua', '', R.so.cash),
+      row('Cash se bharna — Reverse Charge tax (ITC se nahi kat sakta)', '', R.cashRcm),
+      row('KUL CASH PAYABLE', '', R.cashTotal),
+      row('ITC ka bacha hua balance (aage ke liye)', '', R.so.carry)
+    ], boldLabels:['Kul ITC available','KUL CASH PAYABLE','ITC ka bacha hua balance (aage ke liye)'] });
     return { notice:'', tables, summary:R };
+  }
+  if(rt === 'itc180'){
+    const asOf = to || todayStr(), rows = [];
+    vouchers.forEach(v=>{
+      if(v.cancelled || !v.gst || v.voucherType !== 'purchase' || v.gst.rcm || (v.gst.itc || 'eligible') !== 'eligible') return;
+      const bl = billsOf(v.gst.party, asOf), b = bl.bills.find(x=>x.id === v.id);
+      if(!b || b.outstanding < 0.5) return;
+      const deadline = addDays(v.gst.invDate || v.date, 180), left = daysBetween(asOf, deadline);
+      if(left > 30) return;
+      rows.push([left < 0 ? 'ULTA HONA CHAHIYE' : (left <= 30 ? left + ' din bache' : ''), v.gst.party, v.gst.partyGstin || '', v.gst.invNo || v.voucherNo, v.gst.invDate || v.date, deadline, left, b.outstanding, r2(v.gst.tax * b.outstanding / b.amount)]);
+    });
+    rows.sort((x,y)=> x[6] - y[6]);
+    tables.push({ name:'180-din ITC alert — jin khareed ka bhugtan baaki hai (' + fmtDT(asOf) + ' tak)', head:['Sthiti','Supplier','GSTIN','Invoice','Invoice date','Aakhri tareekh','Bache din','Baaki bhugtan (₹)','ITC jo ulta ho sakta hai (₹)'], rows });
+    return { notice:'Niyam: supplier ko invoice date se 180 din me bhugtan na ho to uska ITC ulta karna padta hai (bhugtan ke baad dobara mil sakta hai). Yahan 30 din ke andar aane wale aur nikal chuke bills dikhte hain. Summary ka ITC isi hisaab se apne-aap ghatata / badhta hai.', tables };
   }
   const docs = gstDocs(from, to);
   const mk = (list)=> list.sort((a,b)=> a.v.date < b.v.date ? -1 : a.v.date > b.v.date ? 1 : (a.v.voucherNo < b.v.voucherNo ? -1 : 1));
@@ -2043,14 +2334,15 @@ function gstTables(from, to){
   }
   if(rt === 'purchase'){
     const body = [], tot = { t:0, igst:0, cgst:0, sgst:0, val:0 };
+    const itcLabel = (g)=> ({ eligible:'Eligible', pending:'Rokha (2B)', blocked:'Blocked 17(5)' })[g.itc || 'eligible'] || '';
     mk(docs.filter(v=>v.voucherType === 'purchase' || v.voucherType === 'debit_note').map(v=>({ v }))).forEach(({v})=>{
       const g = v.gst, sg = GST_SIGN[v.voucherType];
       const flag = g.rcm ? 'RCM' : (g.partyGstin ? '' : '⚠️ GSTIN nahi');
-      body.push([v.date, v.voucherNo, g.invNo || '', g.party, g.partyGstin || '', gstStateLabel(g.pos), (v.voucherType === 'debit_note' ? 'Debit Note' : 'Purchase') + (flag ? ' · ' + flag : ''), sg*g.taxable, sg*g.igst, sg*g.cgst, sg*g.sgst, sg*(g.rcm ? g.taxable : g.total)]);
+      body.push([v.date, v.voucherNo, g.invNo || '', g.party, g.partyGstin || '', gstStateLabel(g.pos), (v.voucherType === 'debit_note' ? 'Debit Note' : 'Purchase') + (flag ? ' · ' + flag : ''), itcLabel(g), sg*g.taxable, sg*g.igst, sg*g.cgst, sg*g.sgst, sg*(g.rcm ? g.taxable : g.total)]);
       tot.t += sg*g.taxable; tot.igst += sg*g.igst; tot.cgst += sg*g.cgst; tot.sgst += sg*g.sgst; tot.val += sg*(g.rcm ? g.taxable : g.total);
     });
-    tables.push({ name:'Purchase Register (ITC)', head:['Date','Voucher','Supplier Invoice','Supplier','GSTIN','Place of Supply','Prakar','Taxable','IGST','CGST','SGST','Supplier ko dena'], rows: body, foot:['','','','','','','Kul', r2(tot.t), r2(tot.igst), r2(tot.cgst), r2(tot.sgst), r2(tot.val)] });
-    return { notice:'ITC tabhi milta hai jab supplier registered ho aur uska GSTR-1 me aapka invoice dikhe (GSTR-2B se milan zaroori). Is app me wo milan nahi hota.', tables };
+    tables.push({ name:'Purchase Register (ITC)', head:['Date','Voucher','Supplier Invoice','Supplier','GSTIN','Place of Supply','Prakar','ITC','Taxable','IGST','CGST','SGST','Supplier ko dena'], rows: body, foot:['','','','','','','','Kul', r2(tot.t), r2(tot.igst), r2(tot.cgst), r2(tot.sgst), r2(tot.val)] });
+    return { notice:'ITC tabhi milta hai jab supplier registered ho, tax invoice ho, supplier ka GSTR-1 me invoice dikhe (GSTR-2B), maal mil chuka ho aur 180 din me bhugtan ho. Neeche ke "GSTR-2B se Milan" se invoice milaye ja sakte hain.', tables };
   }
   if(rt === 'hsn'){
     const map = {};
@@ -2074,9 +2366,9 @@ function gstTables(from, to){
 }
 function gstTableHtml(t){
   const cell = (c, isHead)=> typeof c === 'number' ? `<td class="amt" style="text-align:right;">${fmtPlain(c)}</td>` : `<td style="text-align:left;">${escapeHtml(String(c === undefined || c === null ? '' : c))}</td>`;
-  const bold = new Set(t.boldRows || []);
+  const boldL = new Set(t.boldLabels || []);
   const body = t.rows.map((r, i)=> Array.isArray(r)
-    ? `<tr${bold.has(i) ? ' class="bs-g"' : ''}>${r.map(c=>cell(c)).join('')}</tr>`
+    ? `<tr${boldL.has(r[0]) ? ' class="bs-g"' : ''}>${r.map(c=>cell(c)).join('')}</tr>`
     : `<tr class="sub-head"><td colspan="${t.head.length}">${escapeHtml(r.section)}</td></tr>`).join('');
   const foot = t.foot ? `<tr class="total-row">${t.foot.map(c=> typeof c === 'number' ? `<td class="amt">${fmtPlain(c)}</td>` : `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>` : '';
   return `<h3 style="margin:14px 0 6px; color:#0b5539;">${escapeHtml(t.name)}</h3><div style="overflow-x:auto;"><table class="bs-table"><thead><tr>${t.head.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${t.head.length}" class="empty">Is avadhi me koi GST voucher nahi</td></tr>`}${foot}</tbody></table></div>`;
@@ -2102,7 +2394,7 @@ function exportGstExcel(){
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name.slice(0,31));
   };
   const keep = document.getElementById('gstReportType').value;
-  [['summary','Summary'],['sales','Sales'],['purchase','Purchase'],['hsn','HSN'],['rate','Rate-wise']].forEach(([k, nm])=>{
+  [['summary','Summary'],['sales','Sales'],['purchase','Purchase'],['hsn','HSN'],['rate','Rate-wise'],['itc180','ITC-180din']].forEach(([k, nm])=>{
     document.getElementById('gstReportType').value = k; const r = gstTables(from, to); if(r.tables.length) addSheet(nm, r.tables);
   });
   document.getElementById('gstReportType').value = keep;
@@ -2547,6 +2839,7 @@ async function saveVoucher(makeReceipt){
     cancelled: false, cancelReason: '', cancelNote: '', cancelledOn: ''
   };
   if(stockLines.length) voucher.stockLines = stockLines;
+  { const cd = (document.getElementById('vch_credit') || {}).value; if(cd !== undefined && cd !== '') voucher.creditDays = Math.max(0, Math.floor(Number(cd) || 0)); }
   vouchers.push(voucher);
   await persistVouchers();
   
@@ -2557,6 +2850,7 @@ async function saveVoucher(makeReceipt){
   document.getElementById('vch_amount').value = '';
   document.getElementById('vch_ref').value = '';
   document.getElementById('vch_note').value = '';
+  if(document.getElementById('vch_credit')) document.getElementById('vch_credit').value = '';
   if(document.getElementById('vch_activity')) document.getElementById('vch_activity').value = '';
   if(document.getElementById('vch_receipt_name')) document.getElementById('vch_receipt_name').value = '';
   document.getElementById('vch_date').value = todayStr();
@@ -4480,6 +4774,7 @@ function renderAll(){
   if(document.getElementById('tab-statement').style.display !== 'none') renderStatement();
   if(document.getElementById('tab-inventory').style.display !== 'none') renderInventory();
   if(document.getElementById('tab-gst').style.display !== 'none') renderGst();
+  if(document.getElementById('tab-outstanding').style.display !== 'none') renderOutstanding();
 }
 
 function buildBackupData(){
@@ -4959,7 +5254,7 @@ function initEntityUI(){
 }
 
 // ===================== Keyboard shortcuts (Tally jaisa) =====================
-const KB_TABS = { v:'voucher', t:'transactions', l:'ledger', g:'groups', s:'statement', a:'accounts', r:'receipts', i:'inventory', x:'gst', p:'report', c:'reconcile' };
+const KB_TABS = { v:'voucher', t:'transactions', l:'ledger', g:'groups', s:'statement', a:'accounts', r:'receipts', i:'inventory', x:'gst', o:'outstanding', p:'report', c:'reconcile' };
 const KB_VTYPES = { p:'payment', r:'receipt', c:'contra', j:'journal', s:'sales', u:'purchase', n:'credit_note', d:'debit_note' };
 let kbMenuMode = false, kbPillTimer = null;
 function kbIsTyping(el){
@@ -5018,7 +5313,7 @@ function kbToggleHelp(show){
       <div style="font-size:13px; color:#374151; line-height:1.9;">
         <b>Menu (jab cursor kisi khane me na ho):</b><br>
         <span class="kbd" style="float:none;">V</span> Voucher Entry &nbsp; <span class="kbd" style="float:none;">T</span> Transactions &nbsp; <span class="kbd" style="float:none;">L</span> Ledger by Head &nbsp; <span class="kbd" style="float:none;">G</span> Groups &nbsp; <span class="kbd" style="float:none;">S</span> Statement<br>
-        <span class="kbd" style="float:none;">A</span> Account Management &nbsp; <span class="kbd" style="float:none;">R</span> Receipts &nbsp; <span class="kbd" style="float:none;">I</span> Inventory &nbsp; <span class="kbd" style="float:none;">X</span> GST &nbsp; <span class="kbd" style="float:none;">P</span> Report &nbsp; <span class="kbd" style="float:none;">C</span> Reconciliation<br>
+        <span class="kbd" style="float:none;">A</span> Account Management &nbsp; <span class="kbd" style="float:none;">R</span> Receipts &nbsp; <span class="kbd" style="float:none;">I</span> Inventory &nbsp; <span class="kbd" style="float:none;">X</span> GST &nbsp; <span class="kbd" style="float:none;">O</span> Outstanding &nbsp; <span class="kbd" style="float:none;">P</span> Report &nbsp; <span class="kbd" style="float:none;">C</span> Reconciliation<br>
         <b style="display:block; margin-top:8px;">Voucher Entry page par (type chunne ke liye):</b>
         <span class="kbd" style="float:none;">P</span> Payment &nbsp; <span class="kbd" style="float:none;">R</span> Receipt &nbsp; <span class="kbd" style="float:none;">C</span> Contra &nbsp; <span class="kbd" style="float:none;">J</span> Journal<br>
         <span class="kbd" style="float:none;">S</span> Sales &nbsp; <span class="kbd" style="float:none;">U</span> Purchase &nbsp; <span class="kbd" style="float:none;">N</span> Credit Note &nbsp; <span class="kbd" style="float:none;">D</span> Debit Note<br>
