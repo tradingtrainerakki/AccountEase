@@ -358,6 +358,7 @@
     <button class="tab-btn" data-tab="accounts">🏦 Account Management</button>
     <button class="tab-btn" data-tab="receipts">🧾 Receipts</button>
     <button class="tab-btn" data-tab="inventory">📦 Inventory</button>
+    <button class="tab-btn" data-tab="gst">📑 GST</button>
     <button class="tab-btn" data-tab="report">📊 Report</button>
     <button class="tab-btn" data-tab="reconcile">🔄 Reconciliation</button>
   </nav>
@@ -368,6 +369,9 @@
         <h2>📝 New Voucher Entry</h2>
         <label style="margin-left:auto; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#0b5539; cursor:pointer;" title="Tally ki tarah ek hi voucher me kai Dr / Cr lines">
           <input type="checkbox" id="vch_multi" onchange="onMultiToggle()" /> 🧮 Multiple Dr/Cr lines
+        </label>
+        <label id="gstToggleLabel" style="display:none; margin-left:12px; align-items:center; gap:6px; font-size:13px; font-weight:700; color:#7c2d12; cursor:pointer;" title="GST wala tax invoice (CGST+SGST / IGST apne aap)">
+          <input type="checkbox" id="vch_gst" onchange="onGstToggle()" /> 🧾 GST Invoice
         </label>
         <select id="voucherType" onchange="onVoucherTypeChange()">
           <option value="receipt">🧾 Receipt — Paise Aaye</option>
@@ -396,6 +400,7 @@
         <div class="field"><label>Date</label><input id="vch_date" type="date" onchange="onVoucherFieldChange()" /></div>
         <div class="field"><label>Reference / Cheque No.</label><input id="vch_ref" placeholder="Optional" /></div>
       </div>
+      <div id="gstPanel" style="display:none;"></div>
       <div id="multiLinesWrap" style="display:none;"></div>
       <div id="stockLinesWrap"></div>
       <div class="field receipt-name-field" id="receiptNameField" style="display:none;">
@@ -592,6 +597,11 @@
         <div class="field"><label>Opening Rate (₹ per unit)</label><input id="stkOpRate" type="number" step="any" placeholder="0" oninput="stkCalcOpValue()" /></div>
         <div class="field"><label>Opening Value (₹)</label><input id="stkOpValue" disabled placeholder="Qty × Rate" /></div>
       </div>
+      <div class="grid3">
+        <div class="field"><label>HSN / SAC (GST ke liye)</label><input id="stkHsn" placeholder="e.g. 3923" /></div>
+        <div class="field"><label>GST Rate</label><select id="stkGst"></select></div>
+        <div class="field"></div>
+      </div>
       <button class="btn-primary" onclick="addStockItem()">+ Add Stock Item</button>
     </div>
     <div class="card">
@@ -638,6 +648,54 @@
       </div>
       <div class="field" style="max-width:300px;"><label>Group filter</label><select id="stkGroupFilter" onchange="renderStockSummary()"></select></div>
       <div id="stockSummaryWrap"></div>
+    </div>
+  </div>
+
+  <div id="tab-gst" class="tab-content" style="display:none;">
+    <div class="card">
+      <h2>⚙️ GST Settings</h2>
+      <div id="gstSettingsWrap"></div>
+    </div>
+    <div class="card">
+      <h2>👥 Party GST Details (GSTIN / State)</h2>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Grahak (Sundry Debtors) aur supplier (Sundry Creditors) ka GSTIN aur state yahan bharein. Isi se invoice me CGST+SGST ya IGST tay hota hai.</div>
+      <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="gstPartyAll" onchange="renderGstParties()" /> Sabhi ledgers dikhayein (sirf debtors / creditors nahi)</label>
+      <div id="gstPartyWrap"></div>
+    </div>
+    <div class="card">
+      <h2>📑 GST Reports
+        <span style="float:right; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn-secondary btn-small" onclick="exportGstExcel()">📊 Excel</button>
+          <button class="btn-secondary btn-small" onclick="printGstReport()">🖨️ Print</button>
+        </span></h2>
+      <div class="grid3">
+        <div class="field"><label>From</label><input type="date" id="gstFrom" onchange="renderGstReport()" /></div>
+        <div class="field"><label>To</label><input type="date" id="gstTo" onchange="renderGstReport()" /></div>
+        <div class="field"><label>Report</label>
+          <select id="gstReportType" onchange="renderGstReport()">
+            <option value="summary">Summary (GSTR-3B jaisa)</option>
+            <option value="sales">Sales Register (GSTR-1 jaisa)</option>
+            <option value="purchase">Purchase Register (ITC)</option>
+            <option value="hsn">HSN Summary</option>
+            <option value="rate">Rate-wise Summary</option>
+          </select></div>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+        <button class="btn-secondary btn-small" onclick="setGstRange('month')">Is mahina</button>
+        <button class="btn-secondary btn-small" onclick="setGstRange('lastmonth')">Pichla mahina</button>
+        <button class="btn-secondary btn-small" onclick="setGstRange('quarter')">Is quarter</button>
+        <button class="btn-secondary btn-small" onclick="setGstRange('fy')">Is vittiya varsh</button>
+        <button class="btn-secondary btn-small" onclick="setGstRange('all')">Sab</button>
+      </div>
+      <div id="gstReportWrap"></div>
+    </div>
+    <div class="card">
+      <h3>ℹ️ Is app me kya hai aur kya nahi</h3>
+      <div style="font-size:13px; color:#374151; line-height:1.7;">
+        <b>Hai:</b> GST invoice (CGST+SGST / IGST), Sales / Purchase / Credit / Debit Note, Reverse Charge, ITC aur set-off ka hisaab, GSTR-1 / 3B jaise register, HSN summary, Tax Invoice print.<br>
+        <b>Nahi hai:</b> e-invoice (IRN / QR), e-way bill, GST portal par seedha filing / JSON upload, TCS / TDS, Cess, export aur SEZ (zero-rated) supply, ITC blocked-credit (Sec. 17(5)) ki automatic jaanch.<br>
+        <b>Zaroor karein:</b> return file karne se pehle apne CA se rates, ITC aur set-off mila lein. Rates aur niyam badalte rehte hain.
+      </div>
     </div>
   </div>
 
@@ -1176,6 +1234,7 @@ async function loadAll(){
   { const _a = await safeGet('activities'); try{ activities = _a ? JSON.parse(_a) : []; }catch(e){ activities = []; } refreshActivityDropdowns(); }
 
   { const _si = await safeGet('stock-items'); try{ stockItems = _si ? JSON.parse(_si) : []; }catch(e){ stockItems = []; } }
+  { const _gs = await safeGet('gst-settings'); try{ gstSettings = Object.assign(gstDefaults(), _gs ? JSON.parse(_gs) : {}); }catch(e){ gstSettings = gstDefaults(); } }
   { const _g = await safeGet('stock-groups'); try{ stockGroups = _g ? JSON.parse(_g) : []; }catch(e){ stockGroups = []; } }
   trustDetails.gstin = (await safeGet('trust-gstin')) || '';
   { const _b = await safeGet('boms'); try{ boms = _b ? JSON.parse(_b) : []; }catch(e){ boms = []; } }
@@ -1263,6 +1322,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('tab-'+btn.dataset.tab).style.display='block';
     if(btn.dataset.tab==='voucher') renderVoucherStockPanel();
     if(btn.dataset.tab==='inventory') renderInventory();
+    if(btn.dataset.tab==='gst') renderGst();
     if(btn.dataset.tab==='report'){ const _bb = document.getElementById('ledBackBtn'); if(_bb) _bb.style.display = 'none'; renderReport(); }
     if(btn.dataset.tab==='receipts') renderReceipts();
     if(btn.dataset.tab==='transactions') renderTransactions();
@@ -1274,6 +1334,198 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='voucher') { refreshAllLedgerNamesDatalist(); refreshActivityDropdowns(); onVoucherTypeChange(); }
   });
 });
+
+// ===================== GST invoice: voucher entry =====================
+let vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[] };
+function resetVchGst(){ vchGst = { on:false, party:'', pos:'', trade:'', invNo:'', invDate:'', rcm:false, extras:[] }; }
+function gstVoucherAllowed(type){ return gstActive() && ['sales','purchase','credit_note','debit_note'].includes(type); }
+function refreshGstVoucherToggle(){
+  const el = document.getElementById('voucherType'); if(!el) return;
+  const allowed = gstVoucherAllowed(el.value);
+  const lab = document.getElementById('gstToggleLabel'); if(lab) lab.style.display = allowed ? 'flex' : 'none';
+  if(!allowed && vchGst.on) turnGstOff();
+}
+function onGstToggle(){
+  if(document.getElementById('vch_gst').checked){
+    vchGst.on = true; vchGst.invDate = document.getElementById('vch_date').value || todayStr();
+    vchMulti = true; const mm = document.getElementById('vch_multi'); mm.checked = true; mm.disabled = true;
+    vchLines = []; applyMultiMode(); renderGstPanel(); renderVoucherStockPanel(); gstRecalc();
+  } else turnGstOff();
+}
+function turnGstOff(){
+  const was = vchGst.on; resetVchGst();
+  const cb = document.getElementById('vch_gst'); if(cb) cb.checked = false;
+  const mm = document.getElementById('vch_multi'); if(mm) mm.disabled = false;
+  const panel = document.getElementById('gstPanel'); if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+  if(was){ vchMulti = false; if(mm) mm.checked = false; vchLines = []; applyMultiMode(); renderVoucherStockPanel(); }
+}
+function gstPartyOf(name){ return ledgerMaster.find(l=>l.name === name) || null; }
+function gstSupply(){
+  const ent = entityGstState(), party = gstPartyOf(vchGst.party);
+  const pos = vchGst.pos || (party && party.state) || '';
+  if(!ent || !pos) return { type:null, ent, pos };
+  return { type: ent === pos ? 'intra' : 'inter', ent, pos };
+}
+function gstLineTax(taxable, rate, intra){
+  if(rate === null || rate === undefined || isNaN(rate)) return { cgst:0, sgst:0, igst:0 };
+  const half = r2(taxable * rate / 200);
+  return intra ? { cgst:half, sgst:half, igst:0 } : { cgst:0, sgst:0, igst:r2(taxable * rate / 100) };
+}
+function gstCompute(){
+  const type = document.getElementById('voucherType').value;
+  const sup = gstSupply(), intra = sup.type === 'intra';
+  const all = [];
+  vchStockLines.forEach(l=>{
+    if(!l.itemId) return;
+    const it = stockItems.find(x=>x.id === l.itemId), qty = Number(l.qty) || 0, rate = Number(l.rate) || 0;
+    if(!(qty > 0)) return;
+    const taxable = r2(qty * rate), gst = (l.gst === '' || l.gst === undefined) ? null : Number(l.gst);
+    all.push(Object.assign({ kind:'item', itemId:l.itemId, name: it ? it.name : '', hsn: it ? (it.hsn || '') : '', unit: it ? it.unit : '', qty, rate, taxable, gst }, gstLineTax(taxable, gst, intra)));
+  });
+  vchGst.extras.forEach(e=>{
+    const amt = Number(e.amount) || 0; if(!(amt > 0)) return;
+    const gst = (e.gst === '' || e.gst === undefined) ? null : Number(e.gst);
+    all.push(Object.assign({ kind:'extra', name: e.desc || 'Charges', hsn: e.hsn || '', unit:'', qty:1, rate:r2(amt), taxable:r2(amt), gst }, gstLineTax(r2(amt), gst, intra)));
+  });
+  const sum = k => r2(all.reduce((t,x)=>t + x[k], 0));
+  const taxable = sum('taxable'), cgst = sum('cgst'), sgst = sum('sgst'), igst = sum('igst');
+  const tax = r2(cgst + sgst + igst), total = r2(taxable + tax);
+  const lines = [], L = GST_LEDGERS, P = vchGst.party, T = vchGst.trade;
+  const push = (side, ledger, amt)=>{ if(amt > 0.0001 && ledger) lines.push({ side, ledger, amount: r2(amt) }); };
+  const outTax = side=>{ push(side, L.outCgst, cgst); push(side, L.outSgst, sgst); push(side, L.outIgst, igst); };
+  const inTax = side=>{ push(side, L.inCgst, cgst); push(side, L.inSgst, sgst); push(side, L.inIgst, igst); };
+  if(type === 'sales'){ push('Dr', P, total); push('Cr', T, taxable); outTax('Cr'); }
+  else if(type === 'credit_note'){ push('Dr', T, taxable); outTax('Dr'); push('Cr', P, total); }
+  else if(type === 'purchase'){ push('Dr', T, taxable); inTax('Dr'); if(vchGst.rcm){ push('Cr', P, taxable); outTax('Cr'); } else push('Cr', P, total); }
+  else if(type === 'debit_note'){ push('Dr', P, total); push('Cr', T, taxable); inTax('Cr'); }
+  return { type, sup, intra, all, taxable, cgst, sgst, igst, tax, total, lines };
+}
+function gstRecalc(){
+  if(!vchGst.on) return;
+  const g = gstCompute();
+  vchLines = g.lines.map(l=>({ side:l.side, ledger:l.ledger, amount:String(l.amount) }));
+  renderMultiLines(); updateGstSummaryBox(g); updatePreview();
+}
+function renderGstLinesReadonly(wrap){
+  const t = multiTotals();
+  const rows = vchLines.map(l=>`<tr style="background:${l.side==='Dr'?'#fef3f2':'#f0fdf4'};"><td style="width:80px;"><b>${l.side}</b></td><td style="text-align:left;">${escapeHtml(l.ledger)}</td><td style="text-align:right; font-family:monospace;">${fmtPlain(Number(l.amount)||0)}</td></tr>`).join('');
+  wrap.innerHTML = `<div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; background:#fcfffd;">
+    <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">🧮 Dr / Cr Lines (apne aap bani hain)</div>
+    ${vchLines.length ? `<table><thead><tr><th>Dr/Cr</th><th style="text-align:left;">Ledger</th><th>Amount (₹)</th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="text-align:right; font-size:13px; margin-top:6px;">Dr ₹${fmtPlain(t.dr)} &nbsp;|&nbsp; Cr ₹${fmtPlain(t.cr)} &nbsp; ${Math.abs(t.diff) < 0.005 ? '<span style="color:#065f46; font-weight:700;">✅ Balanced</span>' : '<span style="color:#b45309; font-weight:700;">⚠️ Antar ₹' + fmtPlain(Math.abs(t.diff)) + '</span>'}</div>`
+      : '<div style="color:var(--muted); font-size:13px;">Party, ledger aur items bharte hi lines yahan ban jayengi.</div>'}
+  </div>`;
+}
+function gstPartyInfoHtml(){
+  const p = gstPartyOf(vchGst.party);
+  if(!vchGst.party) return '';
+  if(!p) return '<span style="color:#b45309;">⚠️ Ye ledger nahi mila — pehle Groups tab me party ledger banayein.</span>';
+  const c = gstinCheck(p.gstin);
+  return `GSTIN: <b>${escapeHtml(p.gstin || '—')}</b> ${c.empty ? '(B2C / unregistered)' : `<span style="color:${c.ok ? '#166534' : '#b45309'};">${escapeHtml(c.msg)}</span>`} &nbsp;|&nbsp; State: <b>${p.state ? p.state + ' - ' + (GST_STATES[p.state] || '') : '—'}</b>`;
+}
+function renderGstPanel(){
+  const panel = document.getElementById('gstPanel'); if(!panel) return;
+  const type = document.getElementById('voucherType').value;
+  if(!vchGst.on){ panel.style.display = 'none'; panel.innerHTML = ''; return; }
+  panel.style.display = '';
+  const isSale = (type === 'sales' || type === 'credit_note');
+  const partyGrp = isSale ? 'Sundry Debtors' : 'Sundry Creditors', tradeGrp = isSale ? 'Sales Accounts' : 'Purchase Accounts';
+  const partyList = ledgerMaster.filter(l=>l.group === partyGrp), tradeList = ledgerMaster.filter(l=>l.group === tradeGrp);
+  const titles = { sales:'Tax Invoice (Bikri)', purchase:'Kharid (Purchase) Invoice', credit_note:'Credit Note (bikri wapsi)', debit_note:'Debit Note (kharid wapsi)' };
+  const extraRows = vchGst.extras.map((e,i)=>`<tr>
+    <td style="text-align:left;"><input value="${escapeHtml(e.desc||'')}" placeholder="Freight, packing, service..." oninput="onGstExtra(${i},'desc',this.value)" style="padding:5px; width:100%;" /></td>
+    <td><input value="${escapeHtml(e.hsn||'')}" placeholder="HSN/SAC" oninput="onGstExtra(${i},'hsn',this.value)" style="padding:5px; width:90px;" /></td>
+    <td><input type="number" step="any" min="0" value="${e.amount||''}" placeholder="Taxable ₹" oninput="onGstExtra(${i},'amount',this.value)" style="padding:5px; width:110px; text-align:right;" /></td>
+    <td>${gstRateSelectHtml(e.gst, `onchange="onGstExtra(${i},'gst',this.value)" style="padding:5px;"`, true)}</td>
+    <td><button class="delete-btn" onclick="removeGstExtra(${i})">✕</button></td></tr>`).join('');
+  panel.innerHTML = `
+    <datalist id="gstPartyDl">${(partyList.length ? partyList : ledgerMaster).map(l=>`<option value="${escapeHtml(l.name)}">`).join('')}</datalist>
+    <datalist id="gstTradeDl">${(tradeList.length ? tradeList : ledgerMaster).map(l=>`<option value="${escapeHtml(l.name)}">`).join('')}</datalist>
+    <div style="border:1px solid #c7e3d4; background:#f4fbf7; border-radius:10px; padding:12px; margin-bottom:12px;">
+      <div style="font-weight:700; color:#0b5539; margin-bottom:8px;">🧾 GST — ${titles[type] || ''}</div>
+      <div class="grid3">
+        <div class="field"><label>${isSale ? 'Grahak (Party)' : 'Supplier (Party)'}</label><input id="gst_party" list="gstPartyDl" value="${escapeHtml(vchGst.party)}" placeholder="${partyGrp} ka ledger" oninput="onGstField('party', this.value)" /></div>
+        <div class="field"><label>Place of Supply (state)</label><select id="gst_pos" onchange="onGstField('pos', this.value)">${gstStateOptionsHtml(vchGst.pos, '-- party ka state --')}</select></div>
+        <div class="field"><label>${isSale ? 'Sales' : 'Purchase'} ledger</label><input id="gst_trade" list="gstTradeDl" value="${escapeHtml(vchGst.trade)}" placeholder="${tradeGrp} ka ledger" oninput="onGstField('trade', this.value)" /></div>
+      </div>
+      <div id="gstPartyInfo" style="font-size:12px; margin:-2px 0 8px;">${gstPartyInfoHtml()}</div>
+      <div class="grid3">
+        <div class="field"><label>${type === 'purchase' ? 'Supplier ka Invoice No.' : (type === 'sales' ? 'Invoice No. (khaali = voucher no.)' : 'Note / Invoice No.')}</label><input id="gst_invno" value="${escapeHtml(vchGst.invNo)}" oninput="onGstField('invNo', this.value)" /></div>
+        <div class="field"><label>Invoice Date</label><input type="date" id="gst_invdate" value="${vchGst.invDate || ''}" onchange="onGstField('invDate', this.value)" /></div>
+        <div class="field">${type === 'purchase' ? `<label>&nbsp;</label><label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;"><input type="checkbox" id="gst_rcm" ${vchGst.rcm ? 'checked' : ''} onchange="onGstField('rcm', this.checked)" /> Reverse Charge (RCM)</label>` : ''}</div>
+      </div>
+      <div style="font-weight:700; margin:8px 0 4px; font-size:13px;">Aur kharch / service (freight, packing...) — taxable</div>
+      ${vchGst.extras.length ? `<table><thead><tr><th style="text-align:left;">Vivaran</th><th>HSN/SAC</th><th>Taxable ₹</th><th>GST %</th><th></th></tr></thead><tbody>${extraRows}</tbody></table>` : ''}
+      <button class="btn-secondary btn-small" style="margin-top:6px;" onclick="addGstExtra()">+ Charge / service line</button>
+      <div id="gstSummaryBox" style="margin-top:10px;"></div>
+    </div>`;
+}
+function onGstField(key, val){
+  vchGst[key] = val;
+  if(key === 'party'){
+    const p = gstPartyOf(val);
+    if(p && p.state){ vchGst.pos = p.state; const sel = document.getElementById('gst_pos'); if(sel) sel.value = p.state; }
+    const info = document.getElementById('gstPartyInfo'); if(info) info.innerHTML = gstPartyInfoHtml();
+  }
+  gstRecalc();
+}
+function addGstExtra(){ vchGst.extras.push({ desc:'', hsn:'', amount:'', gst:'' }); renderGstPanel(); gstRecalc(); }
+function removeGstExtra(i){ vchGst.extras.splice(i, 1); renderGstPanel(); gstRecalc(); }
+function onGstExtra(i, f, v){ vchGst.extras[i][f] = v; gstRecalc(); }
+function updateGstSummaryBox(g){
+  const box = document.getElementById('gstSummaryBox'); if(!box) return;
+  const sup = g.sup;
+  const badge = sup.type === 'intra' ? '<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:10px;">Intra-state — CGST + SGST</span>'
+              : sup.type === 'inter' ? '<span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:10px;">Inter-state — IGST</span>'
+              : '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px;">⚠️ State tay nahi — GST Settings me apna state aur party ka state chunein</span>';
+  const rcmNote = (g.type === 'purchase' && vchGst.rcm) ? `<div style="font-size:12px; color:#92400e; margin-top:4px;">Reverse Charge: supplier ko sirf taxable ₹${fmtPlain(g.taxable)} dena hai. GST ₹${fmtPlain(g.tax)} aap khud bharenge aur wahi ITC bhi milega.</div>` : '';
+  box.innerHTML = `<div style="font-size:13px; margin-bottom:4px;">${badge}</div>
+    <table style="max-width:420px;"><tbody>
+      <tr><td style="text-align:left;">Taxable value</td><td class="amt" style="text-align:right;">${fmtPlain(g.taxable)}</td></tr>
+      ${g.cgst ? `<tr><td style="text-align:left;">CGST</td><td style="text-align:right;">${fmtPlain(g.cgst)}</td></tr><tr><td style="text-align:left;">SGST</td><td style="text-align:right;">${fmtPlain(g.sgst)}</td></tr>` : ''}
+      ${g.igst ? `<tr><td style="text-align:left;">IGST</td><td style="text-align:right;">${fmtPlain(g.igst)}</td></tr>` : ''}
+      <tr style="font-weight:800; background:#f0fdf4;"><td style="text-align:left;">Invoice total</td><td style="text-align:right;">${fmtPlain(g.total)}</td></tr>
+    </tbody></table>${rcmNote}`;
+}
+function gstValidate(type){
+  if(!gstActive()) return 'GST Settings me GST (Regular) chalu karein';
+  const g = gstCompute();
+  if(!vchGst.party) return 'Party (grahak / supplier) chunein';
+  if(!gstPartyOf(vchGst.party)) return 'Ye party ledger nahi mila. Pehle Groups tab me ledger banayein.';
+  if(!vchGst.trade) return (type === 'sales' || type === 'credit_note') ? 'Sales ledger chunein' : 'Purchase ledger chunein';
+  if(!g.sup.type) return 'GST Settings me apna State aur invoice me Place of Supply chunein';
+  if(!g.all.length) return 'Kam se kam ek item ya charge jodein (Qty aur Rate ke saath)';
+  for(const x of g.all){ if(x.gst === null) return 'GST % chunein: ' + (x.name || 'charge'); }
+  if(type === 'purchase' && !String(vchGst.invNo || '').trim()) return 'Supplier ka Invoice No. likhein (ITC ke liye zaroori)';
+  if(vchGst.rcm && type !== 'purchase') return 'Reverse Charge sirf Purchase me hota hai';
+  return '';
+}
+function gstWarnings(type, g){
+  const out = [], date = document.getElementById('vch_date').value || todayStr();
+  const party = gstPartyOf(vchGst.party), b2b = party && gstinCheck(party.gstin).ok;
+  const isOutward = (type === 'sales' || type === 'credit_note');
+  const minDigits = gstSettings.aato === 'above5' ? 6 : (b2b ? 4 : 0);
+  g.all.forEach(x=>{
+    const h = String(x.hsn || '').replace(/\D/g,'');
+    if(isOutward && minDigits && h.length < minDigits) out.push(`${x.name}: HSN/SAC me kam se kam ${minDigits} digit chahiye (abhi: ${h || 'khaali'})`);
+    if(!isOutward && !h) out.push(`${x.name}: HSN/SAC khaali hai`);
+    if(date >= '2025-09-22' && (x.gst === 12 || x.gst === 28)) out.push(`${x.name}: ${x.gst}% dar 22-Sep-2025 se hat chuki hai (ab 5% / 18% / 40%)`);
+  });
+  if(isOutward && b2b === false && party && party.gstin) out.push('Party ka GSTIN galat dikh raha hai');
+  return out;
+}
+function gstBuildMeta(type, g){
+  const party = gstPartyOf(vchGst.party) || {};
+  const date = document.getElementById('vch_date').value || todayStr();
+  return {
+    regType:'regular', party: vchGst.party, partyGstin: party.gstin || '', partyState: party.state || '',
+    pos: g.sup.pos, supply: g.sup.type, entityState: g.sup.ent, entityGstin: trustDetails.gstin || '',
+    trade: vchGst.trade, invNo: String(vchGst.invNo || '').trim(), invDate: vchGst.invDate || date, rcm: !!(type === 'purchase' && vchGst.rcm),
+    items: g.all.map(x=>({ kind:x.kind, itemId:x.itemId || '', name:x.name, hsn:x.hsn, unit:x.unit, qty:x.qty, rate:x.rate, taxable:x.taxable, gst:x.gst, cgst:x.cgst, sgst:x.sgst, igst:x.igst })),
+    extrasRaw: vchGst.extras.map(e=>({ desc:e.desc, hsn:e.hsn, amount:e.amount, gst:e.gst })),
+    taxable: g.taxable, cgst: g.cgst, sgst: g.sgst, igst: g.igst, tax: g.tax, total: g.total
+  };
+}
 
 // ===================== Multi-line voucher: form =====================
 let vchMulti = false, vchLines = [], editingMultiId = null;
@@ -1322,6 +1574,7 @@ function updateMultiTotals(){
 function renderMultiLines(){
   const wrap = document.getElementById('multiLinesWrap'); if(!wrap) return;
   if(!vchMulti){ wrap.innerHTML = ''; return; }
+  if(vchGst.on){ renderGstLinesReadonly(wrap); return; }
   const rows = vchLines.map((l,i)=>`<tr style="background:${l.side==='Dr'?'#fef3f2':'#f0fdf4'};">
     <td style="width:80px;"><select onchange="onLineSide(${i}, this.value)" style="padding:5px;"><option value="Dr" ${l.side==='Dr'?'selected':''}>Dr</option><option value="Cr" ${l.side==='Cr'?'selected':''}>Cr</option></select></td>
     <td style="text-align:left;"><input list="allLedgerNamesDatalist" value="${escapeHtml(l.ledger||'')}" placeholder="${l.side==='Dr'?'Debit ledger':'Credit ledger'}" oninput="onLineField(${i},'ledger',this.value)" style="width:100%; padding:6px;" /></td>
@@ -1377,13 +1630,16 @@ function renderMultiPreview(wrap){
     <div class="${ok ? 'match-ok' : 'match-bad'} amount-match">${ok ? '✅ Balanced — Dr = Cr' : '⚠️ Sab lines bharein aur Dr = Cr karein'}</div>`;
 }
 function resetMultiForm(){
+  const keepGst = vchGst.on ? { trade: vchGst.trade } : null;
   vchLines = [{ side:'Dr', ledger:'', amount:'' }, { side:'Cr', ledger:'', amount:'' }];
   editingMultiId = null; hideMultiBanner();
   ['vch_ref','vch_note'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
   if(document.getElementById('vch_activity')) document.getElementById('vch_activity').value = '';
   if(document.getElementById('vch_receipt_name')) document.getElementById('vch_receipt_name').value = '';
   document.getElementById('vch_date').value = todayStr();
-  vchStockLines = []; renderVoucherStockPanel(); renderMultiLines(); updatePreview();
+  vchStockLines = [];
+  if(keepGst){ resetVchGst(); vchGst.on = true; vchGst.trade = keepGst.trade; vchGst.invDate = document.getElementById('vch_date').value; vchLines = []; renderGstPanel(); }
+  renderVoucherStockPanel(); renderMultiLines(); updatePreview();
 }
 function cancelMultiEdit(){ resetMultiForm(); }
 async function saveMultiVoucher(makeReceipt){
@@ -1393,6 +1649,13 @@ async function saveMultiVoucher(makeReceipt){
   const note = document.getElementById('vch_note').value.trim();
   const activity = (document.getElementById('vch_activity')||{}).value || '';
   const receiptName = document.getElementById('vch_receipt_name') ? document.getElementById('vch_receipt_name').value.trim() : '';
+  let gstMeta = null;
+  if(vchGst.on){
+    const err = gstValidate(type); if(err){ alert(err); return; }
+    const gpre = gstCompute(), warn = gstWarnings(type, gpre);
+    if(warn.length && !confirm('⚠️ GST jaanch:\n- ' + warn.join('\n- ') + '\n\nPhir bhi save karein?')) return;
+    await ensureGstLedgers(); gstRecalc();
+  }
   const lines = [];
   for(const l of vchLines){
     const ledger = (l.ledger || '').trim(), amt = Number(l.amount);
@@ -1411,12 +1674,13 @@ async function saveMultiVoucher(makeReceipt){
     if(stockLines === null) return;
     const stockTotal = r2(stockLines.reduce((t,l)=>t + l.qty*l.rate, 0));
     const side = (type === 'purchase') ? 'Dr' : (type === 'sales') ? 'Cr' : '';
-    if(side){
+    if(side && !vchGst.on){
       const grp = (type === 'purchase') ? 'Purchase Accounts' : 'Sales Accounts';
       const rel = r2(lines.filter(l=>l.side===side && (ledgerMaster.find(x=>x.name===l.ledger)||{}).group === grp).reduce((t,l)=>t+l.amount,0));
       if(rel > 0 && Math.abs(rel - stockTotal) > 0.5 && !confirm('⚠️ Stock ka total (₹' + fmtPlain(stockTotal) + ') aur ' + grp + ' ki lines ka total (₹' + fmtPlain(rel) + ') alag hai.\n\nPhir bhi save karein?')) return;
     }
   }
+  if(vchGst.on) gstMeta = gstBuildMeta(type, gstCompute());
   let v, vchNo;
   if(editingMultiId){
     v = vouchers.find(x=>x.id===editingMultiId);
@@ -1425,6 +1689,7 @@ async function saveMultiVoucher(makeReceipt){
     v.date = date; v.ref = ref; v.note = note; v.activity = activity;
     if(v.voucherType === 'receipt') v.receiptName = receiptName;
     if(stockLines.length) v.stockLines = stockLines; else delete v.stockLines;
+    if(gstMeta) v.gst = gstMeta; else delete v.gst;
     vchNo = v.voucherNo;
     await persistVouchers();
   } else {
@@ -1437,6 +1702,7 @@ async function saveMultiVoucher(makeReceipt){
       cancelled: false, cancelReason: '', cancelNote: '', cancelledOn: ''
     };
     if(stockLines.length) v.stockLines = stockLines;
+    if(gstMeta) v.gst = gstMeta;
     vouchers.push(v);
     await persistVouchers();
     await persistVoucherCounters();
@@ -1461,13 +1727,390 @@ function editMultiVoucher(id){
   document.getElementById('vch_note').value = v.note || '';
   if(document.getElementById('vch_activity')) document.getElementById('vch_activity').value = v.activity || '';
   if(document.getElementById('vch_receipt_name')) document.getElementById('vch_receipt_name').value = v.receiptName || '';
-  vchStockLines = (v.stockLines || []).map(l=>({ itemId:l.itemId, qty:String(l.qty), rate:String(l.rate) }));
+  vchStockLines = (v.stockLines || []).map(l=>({ itemId:l.itemId, qty:String(l.qty), rate:String(l.rate), gst:(l.gst === undefined || l.gst === null) ? '' : String(l.gst) }));
+  if(v.gst){
+    vchGst = { on:true, party:v.gst.party, pos:v.gst.pos, trade:v.gst.trade, invNo:v.gst.invNo || '', invDate:v.gst.invDate || v.date, rcm:!!v.gst.rcm, extras:(v.gst.extrasRaw || []).map(e=>({ ...e })) };
+    document.getElementById('vch_gst').checked = true; document.getElementById('vch_multi').disabled = true;
+    renderGstPanel();
+  }
   const b = document.getElementById('multiEditBanner');
   b.style.display = 'block';
   b.innerHTML = `✏️ <b>${escapeHtml(v.voucherNo)}</b> edit ho raha hai — Save dabane par isi voucher me badlav hoga. <button class="delete-btn" style="margin-left:8px;" onclick="cancelMultiEdit()">Edit radd karein</button>`;
   applyMultiMode(); renderVoucherStockPanel();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ===================== GST: helpers, settings, party details =====================
+const GST_STATES = {
+  '01':'Jammu & Kashmir','02':'Himachal Pradesh','03':'Punjab','04':'Chandigarh','05':'Uttarakhand','06':'Haryana','07':'Delhi','08':'Rajasthan',
+  '09':'Uttar Pradesh','10':'Bihar','11':'Sikkim','12':'Arunachal Pradesh','13':'Nagaland','14':'Manipur','15':'Mizoram','16':'Tripura','17':'Meghalaya',
+  '18':'Assam','19':'West Bengal','20':'Jharkhand','21':'Odisha','22':'Chhattisgarh','23':'Madhya Pradesh','24':'Gujarat','26':'Dadra & Nagar Haveli and Daman & Diu',
+  '27':'Maharashtra','28':'Andhra Pradesh (purana)','29':'Karnataka','30':'Goa','31':'Lakshadweep','32':'Kerala','33':'Tamil Nadu','34':'Puducherry',
+  '35':'Andaman & Nicobar','36':'Telangana','37':'Andhra Pradesh','38':'Ladakh','97':'Other Territory','99':'Centre Jurisdiction'
+};
+const GST_RATE_LIST = [0, 0.25, 3, 5, 12, 18, 28, 40];
+const GST_LEDGERS = { outCgst:'Output CGST', outSgst:'Output SGST', outIgst:'Output IGST', inCgst:'Input CGST', inSgst:'Input SGST', inIgst:'Input IGST' };
+function gstDefaults(){ return { enabled:false, regType:'regular', state:'', aato:'upto5', compRate:1, openingItc:{ igst:0, cgst:0, sgst:0 } }; }
+let gstSettings = gstDefaults();
+async function persistGstSettings(){ await safeSet('gst-settings', JSON.stringify(gstSettings)); }
+function gstActive(){ return !!(gstSettings.enabled && gstSettings.regType === 'regular'); }
+
+function gstRateOptionsHtml(selected, withBlank){
+  return (withBlank ? `<option value="" ${selected === '' || selected === undefined || selected === null ? 'selected' : ''}>-- GST % --</option>` : '') +
+    GST_RATE_LIST.map(r=> `<option value="${r}" ${(selected !== '' && selected !== undefined && selected !== null && Number(selected) === r) ? 'selected' : ''}>${r}%${(r === 12 || r === 28) ? ' (22-Sep-25 se pehle)' : ''}</option>`).join('');
+}
+function gstRateSelectHtml(selected, attrs, withBlank){ return `<select ${attrs || ''}>${gstRateOptionsHtml(selected, withBlank)}</select>`; }
+function gstStateOptionsHtml(selected, blankLabel){
+  return `<option value="">${blankLabel || '-- State --'}</option>` + Object.keys(GST_STATES).map(c=> `<option value="${c}" ${c === selected ? 'selected' : ''}>${c} - ${GST_STATES[c]}</option>`).join('');
+}
+function gstinChecksum(g14){
+  const cs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'; let sum = 0;
+  for(let i = 0; i < 14; i++){ const v = cs.indexOf(g14[i]); const p = v * ((i % 2 === 0) ? 1 : 2); sum += Math.floor(p / 36) + (p % 36); }
+  return cs[(36 - (sum % 36)) % 36];
+}
+function gstinCheck(raw){
+  const g = (raw || '').trim().toUpperCase();
+  if(!g) return { ok:false, empty:true, msg:'' };
+  if(!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) return { ok:false, msg:'Format galat (15 akshar chahiye)' };
+  if(!GST_STATES[g.slice(0,2)]) return { ok:false, msg:'State code galat' };
+  if(gstinChecksum(g.slice(0,14)) !== g[14]) return { ok:false, msg:'Check-digit galat — GSTIN dobara dekhein' };
+  return { ok:true, state:g.slice(0,2), msg:'✓ ' + GST_STATES[g.slice(0,2)] };
+}
+function entityGstState(){
+  if(gstSettings.state) return gstSettings.state;
+  const c = gstinCheck(trustDetails.gstin);
+  return c.ok ? c.state : '';
+}
+async function ensureGstLedgers(){
+  let changed = false;
+  const defs = [[GST_LEDGERS.outCgst,'Current Liabilities'],[GST_LEDGERS.outSgst,'Current Liabilities'],[GST_LEDGERS.outIgst,'Current Liabilities'],
+                [GST_LEDGERS.inCgst,'Current Assets'],[GST_LEDGERS.inSgst,'Current Assets'],[GST_LEDGERS.inIgst,'Current Assets']];
+  defs.forEach(([name, group])=>{
+    if(!ledgerMaster.some(l=>l.name === name)){
+      ledgerMaster.push({ id:'ldg_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), name, group, parent:'' });
+      changed = true;
+    }
+  });
+  if(changed){ await persistLedgerMaster(); refreshAllLedgerNamesDatalist(); }
+  return changed;
+}
+async function saveGstSetting(key, val){
+  if(key === 'enabled') gstSettings.enabled = !!val;
+  else if(key.startsWith('itc_')){ gstSettings.openingItc[key.slice(4)] = Math.max(0, parseFloat(val) || 0); }
+  else if(key === 'compRate') gstSettings.compRate = Number(val) || 1;
+  else gstSettings[key] = val;
+  if(gstSettings.enabled && gstSettings.regType === 'regular') await ensureGstLedgers();
+  await persistGstSettings();
+  renderGstSettings(); refreshGstVoucherToggle();
+  if(document.getElementById('tab-gst').style.display !== 'none') renderGstReport();
+}
+function renderGstSettings(){
+  const wrap = document.getElementById('gstSettingsWrap'); if(!wrap) return;
+  const g = gstSettings, gc = gstinCheck(trustDetails.gstin), st = entityGstState();
+  const reg = g.regType;
+  wrap.innerHTML = `
+    <label style="display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:12px; cursor:pointer;">
+      <input type="checkbox" ${g.enabled ? 'checked' : ''} onchange="saveGstSetting('enabled', this.checked)" /> Is ${IS_FIRM ? 'Firm' : 'Entity'} me GST chalu karein
+    </label>
+    <div style="${g.enabled ? '' : 'opacity:.5; pointer-events:none;'}">
+      <div class="grid3">
+        <div class="field"><label>Registration ka prakar</label>
+          <select onchange="saveGstSetting('regType', this.value)">
+            <option value="regular" ${reg==='regular'?'selected':''}>Regular (tax invoice, ITC)</option>
+            <option value="composition" ${reg==='composition'?'selected':''}>Composition (bill of supply, ITC nahi)</option>
+            <option value="unregistered" ${reg==='unregistered'?'selected':''}>Unregistered</option>
+          </select></div>
+        <div class="field"><label>Aapka GSTIN (Firm Details me badlein)</label>
+          <input value="${escapeHtml(trustDetails.gstin || '')}" disabled />
+          <div style="font-size:11px; margin-top:3px; color:${gc.ok ? '#166534' : '#b45309'};">${trustDetails.gstin ? escapeHtml(gc.msg) : 'GSTIN abhi bhara nahi hai'}</div></div>
+        <div class="field"><label>Aapka State (Place of Supply ke liye)</label>
+          <select onchange="saveGstSetting('state', this.value)">${gstStateOptionsHtml(st, '-- State chunein --')}</select></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Pichle saal ka Turnover (HSN ke digit ke liye)</label>
+          <select onchange="saveGstSetting('aato', this.value)">
+            <option value="upto5" ${g.aato==='upto5'?'selected':''}>₹5 crore tak (B2B me kam se kam 4 digit HSN)</option>
+            <option value="above5" ${g.aato==='above5'?'selected':''}>₹5 crore se zyada (sabhi me kam se kam 6 digit HSN)</option>
+          </select></div>
+        ${reg === 'composition' ? `<div class="field"><label>Composition ki dar (turnover par)</label>
+          <select onchange="saveGstSetting('compRate', this.value)">
+            <option value="1" ${g.compRate==1?'selected':''}>1% — manufacturer / trader</option>
+            <option value="5" ${g.compRate==5?'selected':''}>5% — restaurant</option>
+            <option value="6" ${g.compRate==6?'selected':''}>6% — services</option>
+          </select></div>` : '<div class="field"></div>'}
+        <div class="field"></div>
+      </div>
+      ${reg === 'regular' ? `
+        <div style="font-weight:700; margin:6px 0;">Pichle mahine se bacha hua ITC (carry forward)</div>
+        <div class="grid3">
+          <div class="field"><label>IGST ITC (₹)</label><input type="number" step="any" min="0" value="${g.openingItc.igst || 0}" onchange="saveGstSetting('itc_igst', this.value)" /></div>
+          <div class="field"><label>CGST ITC (₹)</label><input type="number" step="any" min="0" value="${g.openingItc.cgst || 0}" onchange="saveGstSetting('itc_cgst', this.value)" /></div>
+          <div class="field"><label>SGST ITC (₹)</label><input type="number" step="any" min="0" value="${g.openingItc.sgst || 0}" onchange="saveGstSetting('itc_sgst', this.value)" /></div>
+        </div>
+        <button class="btn-secondary btn-small" onclick="ensureGstLedgers().then(c=>toast(c ? 'GST ledgers ban gaye' : 'GST ledgers pehle se hain'))">🧱 GST ledgers banayein (Output / Input CGST SGST IGST)</button>
+      ` : ''}
+      ${reg === 'composition' ? `<div style="font-size:12.5px; background:#fffbea; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; margin-top:6px;">Composition me tax invoice nahi banta (Bill of Supply), grahak se GST alag se nahi liya ja sakta, ITC nahi milta aur inter-state bikri nahi ho sakti. Tax = turnover × dar. Limit aam taur par ₹1.5 crore (khaas states me ₹75 lakh) — apne CA se pakka karein.</div>` : ''}
+      ${reg === 'unregistered' ? `<div style="font-size:12.5px; background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-top:6px;">Unregistered me GST ka koi hisaab nahi rakha jata.</div>` : ''}
+      <div style="font-size:12px; color:var(--muted); margin-top:10px;">Abhi ki dar: 22-Sep-2025 se 0%, 5%, 18% aur 40% (sone-chandi par 3%, rough diamond par 0.25%). Purani 12% aur 28% sirf purane bill ke liye rakhi gayi hain.</div>
+    </div>`;
+}
+function renderGstParties(){
+  const wrap = document.getElementById('gstPartyWrap'); if(!wrap) return;
+  const all = document.getElementById('gstPartyAll') && document.getElementById('gstPartyAll').checked;
+  const list = ledgerMaster.filter(l=> all || l.group === 'Sundry Debtors' || l.group === 'Sundry Creditors').sort((a,b)=>a.name.localeCompare(b.name));
+  if(!list.length){ wrap.innerHTML = '<div class="empty">Groups tab me Sundry Debtors / Creditors ke under ledger banayein</div>'; return; }
+  wrap.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th style="text-align:left;">Ledger</th><th style="text-align:left;">Group</th><th>GSTIN</th><th>State</th><th style="text-align:left;">Jaanch</th></tr></thead><tbody>` +
+    list.map(l=>{ const c = gstinCheck(l.gstin);
+      return `<tr><td style="text-align:left;"><b>${escapeHtml(l.name)}</b></td><td style="text-align:left;">${escapeHtml(l.group||'')}</td>
+        <td><input id="pg_g_${l.id}" value="${escapeHtml(l.gstin||'')}" placeholder="15 akshar" maxlength="15" style="padding:4px; width:170px; text-transform:uppercase;" onchange="saveParty('${l.id}','gstin',this.value)" /></td>
+        <td><select id="pg_s_${l.id}" style="padding:4px;" onchange="saveParty('${l.id}','state',this.value)">${gstStateOptionsHtml(l.state || '', '-- State --')}</select></td>
+        <td style="text-align:left; font-size:12px;" id="pg_m_${l.id}">${partyGstMsg(l)}</td></tr>`; }).join('') + '</tbody></table></div>';
+}
+function partyGstMsg(l){
+  const c = gstinCheck(l.gstin);
+  if(c.empty) return '<span style="color:#6b7280;">GSTIN nahi — B2C / unregistered maana jayega</span>';
+  const mism = c.ok && l.state && l.state !== c.state;
+  return `<span style="color:${c.ok && !mism ? '#166534' : '#b45309'};">${escapeHtml(c.msg)}${mism ? ' — state GSTIN se alag hai' : ''}</span>`;
+}
+async function saveParty(id, field, val){
+  const l = ledgerMaster.find(x=>x.id === id); if(!l) return;
+  if(field === 'gstin'){
+    l.gstin = (val || '').trim().toUpperCase();
+    const c = gstinCheck(l.gstin);
+    if(c.ok && !l.state){ l.state = c.state; const sel = document.getElementById('pg_s_' + id); if(sel) sel.value = c.state; }
+    const inp = document.getElementById('pg_g_' + id); if(inp) inp.value = l.gstin;
+  } else l.state = val;
+  await persistLedgerMaster();
+  const m = document.getElementById('pg_m_' + id); if(m) m.innerHTML = partyGstMsg(l);
+}
+function renderGst(){ renderGstSettings(); renderGstParties(); renderGstReport(); }
+// ===================== GST: Tax Invoice print =====================
+function gstStateLabel(c){ return c ? c + ' - ' + (GST_STATES[c] || '') : '—'; }
+function printGstInvoice(id){
+  const v = vouchers.find(x=>x.id === id); if(!v || !v.gst) return;
+  const g = v.gst, hdr = getTrustHeaderHtml(), intra = g.supply === 'intra';
+  const title = ({ sales:'TAX INVOICE', credit_note:'CREDIT NOTE', debit_note:'DEBIT NOTE' })[v.voucherType] || 'INVOICE';
+  const party = gstPartyOf(g.party) || {};
+  const rows = g.items.map((x,i)=>`<tr><td>${i+1}</td><td style="text-align:left;">${escapeHtml(x.name)}</td><td>${escapeHtml(x.hsn || '')}</td>
+    <td class="n">${fmtPlain(x.qty)}</td><td>${escapeHtml(x.unit || '')}</td><td class="n">${fmtPlain(x.rate)}</td><td class="n">${fmtPlain(x.taxable)}</td><td>${x.gst}%</td>
+    ${intra ? `<td class="n">${fmtPlain(x.cgst)}</td><td class="n">${fmtPlain(x.sgst)}</td>` : `<td class="n">${fmtPlain(x.igst)}</td>`}
+    <td class="n">${fmtPlain(x.taxable + x.cgst + x.sgst + x.igst)}</td></tr>`).join('');
+  const byRate = {};
+  g.items.forEach(x=>{ const k = String(x.gst); const o = byRate[k] = byRate[k] || { taxable:0, cgst:0, sgst:0, igst:0 }; o.taxable += x.taxable; o.cgst += x.cgst; o.sgst += x.sgst; o.igst += x.igst; });
+  const rateRows = Object.keys(byRate).sort((a,b)=>a-b).map(k=>`<tr><td>${k}%</td><td class="n">${fmtPlain(byRate[k].taxable)}</td>${intra ? `<td class="n">${fmtPlain(byRate[k].cgst)}</td><td class="n">${fmtPlain(byRate[k].sgst)}</td>` : `<td class="n">${fmtPlain(byRate[k].igst)}</td>`}<td class="n">${fmtPlain(byRate[k].cgst + byRate[k].sgst + byRate[k].igst)}</td></tr>`).join('');
+  const w = window.open('', '_blank');
+  w.document.write(`<html><head><meta charset="UTF-8"><title>${title} ${escapeHtml(g.invNo || v.voucherNo)}</title><style>
+    body{ font-family:'Segoe UI',Arial,sans-serif; padding:24px; color:#111827; font-size:12.5px; }
+    .box{ border:1.5px solid #0f6e4e; }
+    .top{ text-align:center; padding:10px; border-bottom:1.5px solid #0f6e4e; }
+    .top h1{ margin:0 0 3px; font-size:20px; color:#0b5539; } .top .l{ font-size:11.5px; color:#374151; line-height:1.5; }
+    .ttl{ text-align:center; font-weight:800; letter-spacing:1px; padding:6px; background:#f0fdf4; border-bottom:1.5px solid #0f6e4e; }
+    .two{ display:flex; border-bottom:1.5px solid #0f6e4e; } .two > div{ flex:1; padding:8px 10px; } .two > div + div{ border-left:1.5px solid #0f6e4e; }
+    .k{ color:#6b7280; font-size:11px; }
+    table{ width:100%; border-collapse:collapse; } th,td{ border:1px solid #9ca3af; padding:4px 5px; text-align:center; font-size:11.5px; } th{ background:#f3f4f6; }
+    td.n{ text-align:right; font-family:'Courier New',monospace; }
+    .tot td{ font-weight:800; background:#f0fdf4; }
+    .sec{ padding:8px 10px; border-top:1.5px solid #0f6e4e; }
+    @media print{ button{ display:none; } }
+  </style></head><body><div class="box">
+    <div class="top"><h1>${escapeHtml(hdr.name)}</h1>${hdr.lines.map(l=>`<div class="l">${escapeHtml(l)}</div>`).join('')}</div>
+    <div class="ttl">${title}${g.rcm ? ' (Reverse Charge)' : ''}</div>
+    <div class="two">
+      <div><div class="k">Invoice / Note No.</div><b>${escapeHtml(g.invNo || v.voucherNo)}</b> &nbsp; <span class="k">(Voucher ${escapeHtml(v.voucherNo)})</span>
+        <div class="k" style="margin-top:6px;">Date</div><b>${fmtDT(g.invDate || v.date)}</b>
+        <div class="k" style="margin-top:6px;">Place of Supply</div><b>${escapeHtml(gstStateLabel(g.pos))}</b>
+        <div class="k" style="margin-top:6px;">Reverse Charge</div><b>${g.rcm ? 'Yes' : 'No'}</b></div>
+      <div><div class="k">${v.voucherType === 'debit_note' ? 'Supplier' : 'Bill To (Party)'}</div><b>${escapeHtml(g.party)}</b>
+        <div class="k" style="margin-top:6px;">GSTIN</div><b>${escapeHtml(g.partyGstin || 'Unregistered')}</b>
+        <div class="k" style="margin-top:6px;">State</div><b>${escapeHtml(gstStateLabel(g.partyState || g.pos))}</b>
+        ${v.note ? `<div class="k" style="margin-top:6px;">Narration</div>${escapeHtml(v.note)}` : ''}</div>
+    </div>
+    <table><thead><tr><th>Sr</th><th style="text-align:left;">Description</th><th>HSN/SAC</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Taxable</th><th>GST</th>${intra ? '<th>CGST</th><th>SGST</th>' : '<th>IGST</th>'}<th>Amount</th></tr></thead>
+      <tbody>${rows}<tr class="tot"><td colspan="6" style="text-align:right;">Total</td><td class="n">${fmtPlain(g.taxable)}</td><td></td>${intra ? `<td class="n">${fmtPlain(g.cgst)}</td><td class="n">${fmtPlain(g.sgst)}</td>` : `<td class="n">${fmtPlain(g.igst)}</td>`}<td class="n">${fmtPlain(g.total)}</td></tr></tbody></table>
+    <div class="sec"><b>Amount in words:</b> ${numberToWords(g.total)} Rupees Only</div>
+    <div class="sec"><b>Tax summary</b>
+      <table style="max-width:520px; margin-top:4px;"><thead><tr><th>Rate</th><th>Taxable</th>${intra ? '<th>CGST</th><th>SGST</th>' : '<th>IGST</th>'}<th>Total tax</th></tr></thead><tbody>${rateRows}</tbody></table></div>
+    <div class="sec" style="font-size:11px; color:#4b5563;">Declaration: Hum ghoshit karte hain ki is invoice me bataya gaya mulya aur vivaran sahi hai. ${g.rcm ? 'Is par tax reverse charge ke antargat dey hai.' : ''}</div>
+    ${getSignatoryHtml()}
+  </div><div style="text-align:center; margin-top:16px;"><button onclick="window.print()" style="padding:9px 18px; background:#0f6e4e; color:#fff; border:none; border-radius:6px; cursor:pointer;">🖨️ Print</button></div></body></html>`);
+  w.document.close();
+}
+
+// ===================== GST: reports =====================
+function setGstRange(kind){
+  const now = new Date(); let from = '', to = '';
+  if(kind === 'month'){ from = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)); to = ymdLocal(new Date(now.getFullYear(), now.getMonth()+1, 0)); }
+  else if(kind === 'lastmonth'){ from = ymdLocal(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 0)); }
+  else if(kind === 'quarter'){ const q0 = Math.floor(((now.getMonth() + 9) % 12) / 3); const startM = (3 + q0*3) % 12; const y = (startM > now.getMonth()) ? now.getFullYear() - 1 : now.getFullYear(); from = ymdLocal(new Date(y, startM, 1)); to = ymdLocal(new Date(y, startM + 3, 0)); }
+  else if(kind === 'fy'){ const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1; from = y + '-04-01'; to = (y+1) + '-03-31'; }
+  document.getElementById('gstFrom').value = from; document.getElementById('gstTo').value = to;
+  renderGstReport();
+}
+function gstDocs(from, to){ return vouchers.filter(v=> !v.cancelled && v.gst && (!from || v.date >= from) && (!to || v.date <= to)); }
+const GST_OUT_TYPES = ['sales','credit_note'], GST_SIGN = { sales:1, credit_note:-1, purchase:1, debit_note:-1 };
+function gstSetoff(liab, itc){
+  const L = { igst:Math.max(0,liab.igst), cgst:Math.max(0,liab.cgst), sgst:Math.max(0,liab.sgst) };
+  const C = { igst:Math.max(0,itc.igst), cgst:Math.max(0,itc.cgst), sgst:Math.max(0,itc.sgst) };
+  const util = { igst:{ igst:0, cgst:0, sgst:0 }, cgst:{ cgst:0, igst:0 }, sgst:{ sgst:0, igst:0 } };
+  // Niyam: IGST credit pehle IGST, phir CGST, phir SGST; CGST credit: CGST phir IGST; SGST credit: SGST phir IGST
+  const use = (ck, lk)=>{ const x = r2(Math.min(C[ck], L[lk])); C[ck] = r2(C[ck] - x); L[lk] = r2(L[lk] - x); util[ck][lk] = r2(util[ck][lk] + x); };
+  use('igst','igst'); use('igst','cgst'); use('igst','sgst');
+  use('cgst','cgst'); use('cgst','igst');
+  use('sgst','sgst'); use('sgst','igst');
+  return { cash:L, carry:C, util };
+}
+function gstCompute3B(from, to){
+  const A = { out:{ t:0, igst:0, cgst:0, sgst:0 }, nil:0, rcm:{ t:0, igst:0, cgst:0, sgst:0 }, itcP:{ igst:0, cgst:0, sgst:0 }, itcR:{ igst:0, cgst:0, sgst:0 }, itcD:{ igst:0, cgst:0, sgst:0 } };
+  gstDocs(from, to).forEach(v=>{
+    const sg = GST_SIGN[v.voucherType] || 0, g = v.gst;
+    if(GST_OUT_TYPES.includes(v.voucherType)){
+      g.items.forEach(x=>{
+        if(!x.gst) A.nil += sg * x.taxable;
+        else { A.out.t += sg * x.taxable; A.out.igst += sg * x.igst; A.out.cgst += sg * x.cgst; A.out.sgst += sg * x.sgst; }
+      });
+    } else if(v.voucherType === 'purchase'){
+      if(g.rcm){ A.rcm.t += g.taxable; ['igst','cgst','sgst'].forEach(k=>{ A.rcm[k] += g[k]; A.itcR[k] += g[k]; }); }
+      else ['igst','cgst','sgst'].forEach(k=>{ A.itcP[k] += g[k]; });
+    } else if(v.voucherType === 'debit_note'){
+      ['igst','cgst','sgst'].forEach(k=>{ A.itcD[k] += g[k]; });
+    }
+  });
+  const op = gstSettings.openingItc;
+  const itc = { igst:r2(op.igst + A.itcP.igst + A.itcR.igst - A.itcD.igst), cgst:r2(op.cgst + A.itcP.cgst + A.itcR.cgst - A.itcD.cgst), sgst:r2(op.sgst + A.itcP.sgst + A.itcR.sgst - A.itcD.sgst) };
+  const liab = { igst:r2(A.out.igst), cgst:r2(A.out.cgst), sgst:r2(A.out.sgst) };
+  const so = gstSetoff(liab, itc);
+  const cashRcm = { igst:r2(A.rcm.igst), cgst:r2(A.rcm.cgst), sgst:r2(A.rcm.sgst) };
+  const cashTotal = { igst:r2(so.cash.igst + cashRcm.igst), cgst:r2(so.cash.cgst + cashRcm.cgst), sgst:r2(so.cash.sgst + cashRcm.sgst) };
+  return { A, op, itc, liab, so, cashRcm, cashTotal };
+}
+function gstTables(from, to){
+  const tables = [];
+  const reg = gstSettings.regType;
+  const rt = document.getElementById('gstReportType') ? document.getElementById('gstReportType').value : 'summary';
+  if(!gstSettings.enabled) return { notice:'GST chalu nahi hai — upar GST Settings me chalu karein.', tables };
+  if(reg === 'unregistered') return { notice:'Unregistered — GST ka hisaab nahi rakha jata.', tables };
+  if(reg === 'composition'){
+    let turnover = 0;
+    allLegs().forEach(l=>{ if(l.cancelled) return; if((from && l.date < from) || (to && l.date > to)) return;
+      const cg = (ledgerMaster.find(x=>x.name === l.crLedger) || {}).group, dg = (ledgerMaster.find(x=>x.name === l.drLedger) || {}).group;
+      if(cg === 'Sales Accounts') turnover += l.amount; if(dg === 'Sales Accounts') turnover -= l.amount; });
+    turnover = r2(turnover); const rate = Number(gstSettings.compRate) || 1, tax = r2(turnover * rate / 100), half = r2(turnover * rate / 200);
+    tables.push({ name:'Composition (CMP-08 jaisa)', head:['Particulars','Amount (₹)'], rows:[['Is avadhi ka turnover (Sales Accounts)', turnover], ['Composition dar (%)', rate], ['CGST', half], ['SGST', half], ['Kul tax jo bharna hai', tax]] });
+    return { notice:'Composition: tax invoice nahi, ITC nahi, inter-state bikri nahi. Tax turnover × dar. CMP-08 tikmahi bhari jati hai aur saalana GSTR-4. Sahi dar aur limit apne CA se pakki karein.', tables };
+  }
+  if(rt === 'summary'){
+    const R = gstCompute3B(from, to), A = R.A, tt = o=> r2(o.igst + o.cgst + o.sgst);
+    const num = (a,b,c)=> [a,b,c,r2(a+b+c)];
+    tables.push({ name:'Summary (GSTR-3B jaisa)', head:['Vivaran','Taxable value','IGST','CGST','SGST','Kul tax'], rows:[
+      { section:'3.1 Outward supplies aur reverse charge wali inward supplies' },
+      ['3.1(a) Taxable outward supplies (credit note ghata kar)', r2(A.out.t), r2(A.out.igst), r2(A.out.cgst), r2(A.out.sgst), tt(A.out)],
+      ['3.1(c) Nil-rated / exempt outward (0%)', r2(A.nil), '', '', '', ''],
+      ['3.1(d) Inward supplies — Reverse Charge', r2(A.rcm.t), r2(A.rcm.igst), r2(A.rcm.cgst), r2(A.rcm.sgst), tt(A.rcm)],
+      { section:'4. Input Tax Credit (ITC)' },
+      ['Pichle mahine se bacha ITC (opening)', '', R.op.igst, R.op.cgst, R.op.sgst, r2(R.op.igst + R.op.cgst + R.op.sgst)],
+      ['4(A)(5) Purchase par ITC', '', r2(A.itcP.igst), r2(A.itcP.cgst), r2(A.itcP.sgst), tt(A.itcP)],
+      ['4(A)(3) Reverse Charge par ITC', '', r2(A.itcR.igst), r2(A.itcR.cgst), r2(A.itcR.sgst), tt(A.itcR)],
+      ['4(B) ITC ghata — Debit Note (kharid wapsi)', '', -r2(A.itcD.igst), -r2(A.itcD.cgst), -r2(A.itcD.sgst), -tt(A.itcD)],
+      ['Kul ITC available', '', R.itc.igst, R.itc.cgst, R.itc.sgst, r2(R.itc.igst + R.itc.cgst + R.itc.sgst)],
+      { section:'6.1 Tax ka bhugtan (set-off)' },
+      ['Output tax dayitva (outward supplies par)', '', R.liab.igst, R.liab.cgst, R.liab.sgst, r2(R.liab.igst + R.liab.cgst + R.liab.sgst)],
+      ['  IGST credit se kata (pehle IGST, phir CGST, phir SGST)', '', R.so.util.igst.igst, R.so.util.igst.cgst, R.so.util.igst.sgst, r2(R.so.util.igst.igst + R.so.util.igst.cgst + R.so.util.igst.sgst)],
+      ['  CGST credit se kata (pehle CGST, phir IGST)', '', R.so.util.cgst.igst, R.so.util.cgst.cgst, '', r2(R.so.util.cgst.igst + R.so.util.cgst.cgst)],
+      ['  SGST credit se kata (pehle SGST, phir IGST)', '', R.so.util.sgst.igst, '', R.so.util.sgst.sgst, r2(R.so.util.sgst.igst + R.so.util.sgst.sgst)],
+      ['Cash se bharna — outward tax ka bacha hua', '', R.so.cash.igst, R.so.cash.cgst, R.so.cash.sgst, r2(R.so.cash.igst + R.so.cash.cgst + R.so.cash.sgst)],
+      ['Cash se bharna — Reverse Charge tax (ITC se nahi kat sakta)', '', R.cashRcm.igst, R.cashRcm.cgst, R.cashRcm.sgst, r2(R.cashRcm.igst + R.cashRcm.cgst + R.cashRcm.sgst)],
+      ['KUL CASH PAYABLE', '', R.cashTotal.igst, R.cashTotal.cgst, R.cashTotal.sgst, r2(R.cashTotal.igst + R.cashTotal.cgst + R.cashTotal.sgst)],
+      ['ITC ka bacha hua balance (aage ke liye)', '', R.so.carry.igst, R.so.carry.cgst, R.so.carry.sgst, r2(R.so.carry.igst + R.so.carry.cgst + R.so.carry.sgst)]
+    ], boldRows:[9, 17, 18] });
+    return { notice:'', tables, summary:R };
+  }
+  const docs = gstDocs(from, to);
+  const mk = (list)=> list.sort((a,b)=> a.v.date < b.v.date ? -1 : a.v.date > b.v.date ? 1 : (a.v.voucherNo < b.v.voucherNo ? -1 : 1));
+  if(rt === 'sales'){
+    const body = [], cdn = [], tot = { t:0, igst:0, cgst:0, sgst:0, val:0 };
+    const rowsOf = (v, sign)=>{
+      const g = v.gst, byRate = {};
+      g.items.forEach(x=>{ const o = byRate[x.gst] = byRate[x.gst] || { t:0, igst:0, cgst:0, sgst:0 }; o.t += x.taxable; o.igst += x.igst; o.cgst += x.cgst; o.sgst += x.sgst; });
+      return Object.keys(byRate).sort((a,b)=>a-b).map(k=>{ const o = byRate[k];
+        return [v.date, v.voucherNo, g.invNo || v.voucherNo, g.party, g.partyGstin || '', gstStateLabel(g.pos), g.partyGstin ? 'B2B' : 'B2C', r2(o.t), Number(k), r2(o.igst), r2(o.cgst), r2(o.sgst), r2(o.t + o.igst + o.cgst + o.sgst)]; });
+    };
+    mk(docs.filter(v=>v.voucherType === 'sales').map(v=>({ v }))).forEach(({v})=> rowsOf(v).forEach(r=>{ body.push(r); tot.t += r[7]; tot.igst += r[9]; tot.cgst += r[10]; tot.sgst += r[11]; tot.val += r[12]; }));
+    mk(docs.filter(v=>v.voucherType === 'credit_note' || v.voucherType === 'debit_note').map(v=>({ v }))).forEach(({v})=> rowsOf(v).forEach(r=> cdn.push([r[0], VOUCHER_LABELS[v.voucherType] + ' ' + r[1]].concat(r.slice(2)))));
+    const head = ['Date','Voucher','Invoice No.','Party','GSTIN','Place of Supply','Type','Taxable','GST %','IGST','CGST','SGST','Invoice value'];
+    tables.push({ name:'Sales Register (GSTR-1 jaisa: B2B / B2C)', head, rows: body, foot:['','','','','','','Kul', r2(tot.t), '', r2(tot.igst), r2(tot.cgst), r2(tot.sgst), r2(tot.val)] });
+    tables.push({ name:'Credit / Debit Notes', head, rows: cdn });
+    return { notice:'', tables };
+  }
+  if(rt === 'purchase'){
+    const body = [], tot = { t:0, igst:0, cgst:0, sgst:0, val:0 };
+    mk(docs.filter(v=>v.voucherType === 'purchase' || v.voucherType === 'debit_note').map(v=>({ v }))).forEach(({v})=>{
+      const g = v.gst, sg = GST_SIGN[v.voucherType];
+      const flag = g.rcm ? 'RCM' : (g.partyGstin ? '' : '⚠️ GSTIN nahi');
+      body.push([v.date, v.voucherNo, g.invNo || '', g.party, g.partyGstin || '', gstStateLabel(g.pos), (v.voucherType === 'debit_note' ? 'Debit Note' : 'Purchase') + (flag ? ' · ' + flag : ''), sg*g.taxable, sg*g.igst, sg*g.cgst, sg*g.sgst, sg*(g.rcm ? g.taxable : g.total)]);
+      tot.t += sg*g.taxable; tot.igst += sg*g.igst; tot.cgst += sg*g.cgst; tot.sgst += sg*g.sgst; tot.val += sg*(g.rcm ? g.taxable : g.total);
+    });
+    tables.push({ name:'Purchase Register (ITC)', head:['Date','Voucher','Supplier Invoice','Supplier','GSTIN','Place of Supply','Prakar','Taxable','IGST','CGST','SGST','Supplier ko dena'], rows: body, foot:['','','','','','','Kul', r2(tot.t), r2(tot.igst), r2(tot.cgst), r2(tot.sgst), r2(tot.val)] });
+    return { notice:'ITC tabhi milta hai jab supplier registered ho aur uska GSTR-1 me aapka invoice dikhe (GSTR-2B se milan zaroori). Is app me wo milan nahi hota.', tables };
+  }
+  if(rt === 'hsn'){
+    const map = {};
+    docs.filter(v=>GST_OUT_TYPES.includes(v.voucherType)).forEach(v=>{ const sg = GST_SIGN[v.voucherType];
+      v.gst.items.forEach(x=>{ const k = [x.hsn || '—', x.gst, x.unit || ''].join('|'); const o = map[k] = map[k] || { hsn:x.hsn || '—', desc:x.name, unit:x.unit || '', rate:x.gst, qty:0, t:0, igst:0, cgst:0, sgst:0 };
+        o.qty += sg * x.qty; o.t += sg * x.taxable; o.igst += sg * x.igst; o.cgst += sg * x.cgst; o.sgst += sg * x.sgst; }); });
+    const rows = Object.values(map).sort((a,b)=> String(a.hsn).localeCompare(String(b.hsn))).map(o=>[o.hsn, o.desc, o.unit, r2(o.qty), r2(o.t), o.rate, r2(o.igst), r2(o.cgst), r2(o.sgst), r2(o.igst + o.cgst + o.sgst)]);
+    tables.push({ name:'HSN Summary — outward (GSTR-1 Table 12 jaisa)', head:['HSN/SAC','Vivaran','UQC','Qty','Taxable','GST %','IGST','CGST','SGST','Kul tax'], rows });
+    return { notice: gstSettings.aato === 'above5' ? 'Turnover ₹5 crore se zyada: sabhi supply me kam se kam 6 digit HSN.' : 'Turnover ₹5 crore tak: B2B supply me kam se kam 4 digit HSN.', tables };
+  }
+  if(rt === 'rate'){
+    const mkRate = (types, label)=>{ const m = {};
+      docs.filter(v=>types.includes(v.voucherType)).forEach(v=>{ const sg = GST_SIGN[v.voucherType]; v.gst.items.forEach(x=>{ const o = m[x.gst] = m[x.gst] || { t:0, igst:0, cgst:0, sgst:0 }; o.t += sg*x.taxable; o.igst += sg*x.igst; o.cgst += sg*x.cgst; o.sgst += sg*x.sgst; }); });
+      const rows = Object.keys(m).sort((a,b)=>a-b).map(k=>[Number(k), r2(m[k].t), r2(m[k].igst), r2(m[k].cgst), r2(m[k].sgst), r2(m[k].igst + m[k].cgst + m[k].sgst)]);
+      tables.push({ name:label, head:['GST %','Taxable','IGST','CGST','SGST','Kul tax'], rows }); };
+    mkRate(['sales','credit_note'], 'Outward — dar ke hisaab se (credit note ghata kar)');
+    mkRate(['purchase','debit_note'], 'Inward — dar ke hisaab se (debit note ghata kar)');
+    return { notice:'', tables };
+  }
+  return { notice:'', tables };
+}
+function gstTableHtml(t){
+  const cell = (c, isHead)=> typeof c === 'number' ? `<td class="amt" style="text-align:right;">${fmtPlain(c)}</td>` : `<td style="text-align:left;">${escapeHtml(String(c === undefined || c === null ? '' : c))}</td>`;
+  const bold = new Set(t.boldRows || []);
+  const body = t.rows.map((r, i)=> Array.isArray(r)
+    ? `<tr${bold.has(i) ? ' class="bs-g"' : ''}>${r.map(c=>cell(c)).join('')}</tr>`
+    : `<tr class="sub-head"><td colspan="${t.head.length}">${escapeHtml(r.section)}</td></tr>`).join('');
+  const foot = t.foot ? `<tr class="total-row">${t.foot.map(c=> typeof c === 'number' ? `<td class="amt">${fmtPlain(c)}</td>` : `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>` : '';
+  return `<h3 style="margin:14px 0 6px; color:#0b5539;">${escapeHtml(t.name)}</h3><div style="overflow-x:auto;"><table class="bs-table"><thead><tr>${t.head.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${t.head.length}" class="empty">Is avadhi me koi GST voucher nahi</td></tr>`}${foot}</tbody></table></div>`;
+}
+function renderGstReport(){
+  const wrap = document.getElementById('gstReportWrap'); if(!wrap) return;
+  const from = document.getElementById('gstFrom').value, to = document.getElementById('gstTo').value;
+  const r = gstTables(from, to), hdr = getTrustHeaderHtml();
+  const period = (from || to) ? `${from ? fmtDT(from) : 'Shuru'} se ${to ? fmtDT(to) : 'Aaj tak'}` : 'Sab dates';
+  wrap.innerHTML = `<div style="text-align:center; margin-bottom:10px;"><h3 style="margin:0 0 3px; color:#0b5539;">${escapeHtml(hdr.name)}</h3>
+      <div style="font-size:12px; color:#666;">GST Report — ${period}${trustDetails.gstin ? ' | GSTIN: ' + escapeHtml(trustDetails.gstin) : ''}</div></div>
+    ${r.notice ? `<div style="font-size:12.5px; background:#fffbea; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; margin-bottom:8px;">${escapeHtml(r.notice)}</div>` : ''}
+    ${r.tables.map(gstTableHtml).join('')}`;
+}
+function printGstReport(){ printReportWrap('gstReportWrap', 'GST Report'); }
+function exportGstExcel(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library load nahi hui'); return; }
+  const from = document.getElementById('gstFrom').value, to = document.getElementById('gstTo').value;
+  const wb = XLSX.utils.book_new(), cur = document.getElementById('gstReportType').value;
+  const addSheet = (name, tables)=>{
+    const aoa = [];
+    tables.forEach(t=>{ aoa.push([t.name]); aoa.push(t.head); t.rows.forEach(r=> aoa.push(Array.isArray(r) ? r : [r.section])); if(t.foot) aoa.push(t.foot); aoa.push([]); });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name.slice(0,31));
+  };
+  const keep = document.getElementById('gstReportType').value;
+  [['summary','Summary'],['sales','Sales'],['purchase','Purchase'],['hsn','HSN'],['rate','Rate-wise']].forEach(([k, nm])=>{
+    document.getElementById('gstReportType').value = k; const r = gstTables(from, to); if(r.tables.length) addSheet(nm, r.tables);
+  });
+  document.getElementById('gstReportType').value = keep;
+  if(!wb.SheetNames.length){ alert('Export ke liye koi data nahi'); return; }
+  XLSX.writeFile(wb, `GST-${(trustName || 'report').replace(/[^a-zA-Z0-9]/g,'_')}-${todayStr()}.xlsx`);
+}
+
+
 
 // ===================== Voucher: Stock lines (Qty x Rate) =====================
 let vchStockLines = [];
@@ -1479,6 +2122,7 @@ function stockAvailableQty(itemId){
   return r ? r.clQty : 0;
 }
 function syncAmountFromStock(){
+  if(vchGst.on){ gstRecalc(); return; }
   const amtEl = document.getElementById('vch_amount');
   if(!amtEl) return;
   if(vchStockLines.length){
@@ -1490,9 +2134,14 @@ function syncAmountFromStock(){
   }
   updatePreview();
 }
-function addVchStockLine(){ vchStockLines.push({ itemId:'', qty:'', rate:'' }); renderVoucherStockPanel(); }
+function addVchStockLine(){ vchStockLines.push({ itemId:'', qty:'', rate:'', gst:'' }); renderVoucherStockPanel(); }
 function removeVchStockLine(i){ vchStockLines.splice(i,1); renderVoucherStockPanel(); }
-function onVchStockItemChange(i, val){ vchStockLines[i].itemId = val; renderVoucherStockPanel(); }
+function onVchStockItemChange(i, val){
+  vchStockLines[i].itemId = val;
+  const it = stockItems.find(x=>x.id === val);
+  vchStockLines[i].gst = (it && it.gstRate !== '' && it.gstRate !== undefined) ? String(it.gstRate) : '';
+  renderVoucherStockPanel();
+}
 function onVchStockLineChange(i, field, val){
   vchStockLines[i][field] = val;
   const l = vchStockLines[i];
@@ -1511,23 +2160,25 @@ function renderVoucherStockPanel(){
     wrap.innerHTML = `<div style="font-size:12px; color:var(--muted); margin-bottom:10px;">📦 Stock ke saath voucher banana ho to pehle <b>Inventory</b> tab me Stock Item banayein. Bina stock ke voucher pehle jaisa hi chalega.</div>`;
     vchStockLines = []; syncAmountFromStock(); return;
   }
+  const gOn = vchGst.on;
   const vInfo = currentStockInfo();
   const rows = vchStockLines.map((l,i)=>{
     const opts = stockItemOptions(l.itemId, [], null, vInfo);
     const it = stockItems.find(x=>x.id===l.itemId);
     return `<tr>
-      <td style="text-align:left;"><select onchange="onVchStockItemChange(${i}, this.value)" style="padding:5px;">${opts}</select></td>
+      <td style="text-align:left;"><select onchange="onVchStockItemChange(${i}, this.value)" style="padding:5px;">${opts}</select>${gOn && it ? `<div style="font-size:11px; color:var(--muted);">HSN: ${escapeHtml(it.hsn || '— nahi bhara —')}</div>` : ''}</td>
       <td><input type="number" step="any" min="0" value="${l.qty}" placeholder="Qty" oninput="onVchStockLineChange(${i},'qty',this.value)" style="width:90px; padding:5px; text-align:right;" /> <span style="font-size:11px; color:var(--muted);">${it?escapeHtml(it.unit):''}</span></td>
       <td><input type="number" step="any" min="0" value="${l.rate}" placeholder="Rate" oninput="onVchStockLineChange(${i},'rate',this.value)" style="width:100px; padding:5px; text-align:right;" /></td>
       <td style="font-family:monospace;" id="vstkAmt_${i}">${fmtPlain((Number(l.qty)||0)*(Number(l.rate)||0))}</td>
+      ${gOn ? `<td>${gstRateSelectHtml(l.gst, `onchange="onVchStockLineChange(${i},'gst',this.value)" style="padding:5px;"`, true)}</td>` : ''}
       <td><button class="delete-btn" onclick="removeVchStockLine(${i})">✕</button></td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `
     <div style="border:1px dashed var(--border); border-radius:10px; padding:12px; margin-bottom:12px; background:#fafffc;">
-      <div style="font-weight:700; color:var(--primary-dark); margin-bottom:4px;">📦 Stock Items (optional)</div>
-      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${STOCK_DIR_LABEL[type]}. Item jodte hi Amount = Qty × Rate ka total ho jayega.</div>
-      ${vchStockLines.length ? `<div style="overflow-x:auto;"><table><thead><tr><th style="text-align:left;">Item</th><th>Qty</th><th>Rate (₹)</th><th>Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+      <div style="font-weight:700; color:var(--primary-dark); margin-bottom:4px;">📦 Stock Items ${gOn ? '(GST invoice ke item)' : '(optional)'}</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${STOCK_DIR_LABEL[type]}. ${gOn ? 'Rate GST ke bina (taxable) daalein; GST upar se jodi jayegi.' : 'Item jodte hi Amount = Qty × Rate ka total ho jayega.'}</div>
+      ${vchStockLines.length ? `<div style="overflow-x:auto;"><table><thead><tr><th style="text-align:left;">Item</th><th>Qty</th><th>Rate (₹)</th><th>${gOn ? 'Taxable' : 'Amount'}</th>${gOn ? '<th>GST %</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
       <button class="btn-secondary btn-small" style="margin-top:8px;" onclick="addVchStockLine()">+ Add Stock Item</button>
     </div>`;
   syncAmountFromStock();
@@ -1540,7 +2191,8 @@ function validateVchStockLines(type){
     const qty = Number(l.qty), rate = Number(l.rate);
     if(!(qty > 0)){ alert('Stock line me Qty 0 se zyada honi chahiye'); return null; }
     if(!(rate >= 0) || l.rate === ''){ alert('Stock line me Rate daalein'); return null; }
-    out.push({ itemId: l.itemId, qty, rate });
+    if(vchGst.on && (l.gst === '' || l.gst === undefined)){ const it0 = stockItems.find(x=>x.id === l.itemId); alert('GST % chunein: ' + (it0 ? it0.name : 'item')); return null; }
+    out.push(vchGst.on ? { itemId: l.itemId, qty, rate, gst: Number(l.gst) } : { itemId: l.itemId, qty, rate });
   }
   const dir = ({purchase:'in', credit_note:'in', sales:'out', debit_note:'out'})[type];
   if(dir === 'out'){
@@ -1558,6 +2210,7 @@ function validateVchStockLines(type){
 function onVoucherTypeChange(){
   const type = document.getElementById('voucherType').value;
   editingMultiId = null; hideMultiBanner();
+  if(vchGst.on) turnGstOff();
   if(vchMulti) vchLines = [{ side:'Dr', ledger:'', amount:'' }, { side:'Cr', ledger:'', amount:'' }];
   document.getElementById('vch_dr').value = '';
   document.getElementById('vch_cr').value = '';
@@ -1581,6 +2234,7 @@ function onVoucherTypeChange(){
   vchStockLines = [];
   renderVoucherStockPanel();
   renderMultiLines();
+  refreshGstVoucherToggle();
   updatePreview();
 }
 
@@ -2460,10 +3114,11 @@ function renderTransactions(){
     const isM = isMulti(v);
     const editFn = isM ? 'editMultiVoucher' : 'startEditVoucher';
     const lineHtml = (side)=> v.lines.filter(l=>l.side===side).map(l=>`<div><b>${side}:</b> ${escapeHtml(l.ledger)} <span style="font-family:monospace; color:#6b7280;">₹${fmtPlain(l.amount)}</span></div>`).join('');
-    const multiTag = isM ? `<br><span class="tag custom">🧮 ${v.lines.length} lines</span>` : '';
+    const multiTag = (isM ? `<br><span class="tag custom">🧮 ${v.lines.length} lines</span>` : '') + (v.gst ? `<br><span class="tag custom" title="Invoice ${escapeHtml(v.gst.invNo || '')} | Taxable ${fmtPlain(v.gst.taxable)} | Tax ${fmtPlain(v.gst.tax)}">🧾 GST ${v.gst.supply === 'inter' ? 'IGST' : 'CGST+SGST'}${v.gst.rcm ? ' · RCM' : ''}</span>` : '');
+    const invBtnHtml = (v.gst && ['sales','credit_note','debit_note'].includes(v.voucherType)) ? `<button class="receipt-gen-btn" onclick="printGstInvoice('${v.id}')">🧾 Invoice</button>` : '';
     const cancelledClass = v.cancelled ? 'cancelled-row' : '';
     const statusTag = v.cancelled ? `<span class="tag cancelled">❌ CANCELLED</span>` : `<span class="tag active">✅ Active</span>`;
-    const receiptBtn = (v.voucherType === 'receipt') ? `<button class="receipt-gen-btn" onclick="openGenerateReceiptModal('${v.id}')">🧾 Receipt</button>` : '';
+    const receiptBtn = invBtnHtml + ((v.voucherType === 'receipt') ? `<button class="receipt-gen-btn" onclick="openGenerateReceiptModal('${v.id}')">🧾 Receipt</button>` : '');
     const actions = v.cancelled
       ? `${receiptBtn}<button class="uncancel-btn" onclick="uncancelVoucher('${v.id}')">Un-cancel</button><button class="delete-btn" onclick="deleteVoucher('${v.id}')">Delete</button>`
       : `${receiptBtn}<button class="edit-btn" onclick="${editFn}('${v.id}')">Edit</button><button class="cancel-btn" onclick="openCancelModal('${v.id}')">Cancel</button><button class="delete-btn" onclick="deleteVoucher('${v.id}')">Delete</button>`;
@@ -3367,6 +4022,8 @@ function allStockGroups(){
 function refreshStockDropdowns(){
   const sel = document.getElementById('stkUnit');
   if(sel){ const cur = sel.value; sel.innerHTML = allStockUnits().map(u=>`<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join(''); if(cur) sel.value = cur; }
+  const gsr = document.getElementById('stkGst');
+  if(gsr && !gsr.options.length) gsr.innerHTML = gstRateOptionsHtml('', true);
   const gs = document.getElementById('stkGroup');
   if(gs){ const cur = gs.value; gs.innerHTML = allStockGroups().map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join(''); if(cur && allStockGroups().includes(cur)) gs.value = cur; }
   const gf = document.getElementById('stkGroupFilter');
@@ -3403,9 +4060,9 @@ async function addStockItem(){
   const qty = parseFloat(document.getElementById('stkOpQty').value)||0;
   const rate = parseFloat(document.getElementById('stkOpRate').value)||0;
   if(qty < 0 || rate < 0){ alert('Qty / Rate negative nahi ho sakte'); return; }
-  stockItems.push({ id:'stk_'+Date.now(), name, group: document.getElementById('stkGroup').value, unit: document.getElementById('stkUnit').value || 'Nos', openingQty: qty, openingRate: rate });
+  stockItems.push({ id:'stk_'+Date.now(), name, group: document.getElementById('stkGroup').value, unit: document.getElementById('stkUnit').value || 'Nos', openingQty: qty, openingRate: rate, hsn: (document.getElementById('stkHsn').value || '').trim(), gstRate: document.getElementById('stkGst').value === '' ? '' : Number(document.getElementById('stkGst').value) });
   await persistStockItems();
-  ['stkName','stkOpQty','stkOpRate','stkOpValue'].forEach(id=>document.getElementById(id).value='');
+  ['stkName','stkOpQty','stkOpRate','stkOpValue','stkHsn'].forEach(id=>document.getElementById(id).value='');
   renderInventory(); renderAll();
 }
 async function addStockUnit(){
@@ -3431,6 +4088,8 @@ async function saveEditStock(id){
   if(qty < 0 || rate < 0){ alert('Qty / Rate negative nahi ho sakte'); return; }
   it.name = name; it.group = document.getElementById('estkGroup_'+id).value;
   it.unit = document.getElementById('estkUnit_'+id).value; it.openingQty = qty; it.openingRate = rate;
+  it.hsn = (document.getElementById('estkHsn_'+id).value || '').trim();
+  it.gstRate = document.getElementById('estkGst_'+id).value === '' ? '' : Number(document.getElementById('estkGst_'+id).value);
   await persistStockItems(); editingStockId = null; renderInventory(); renderAll();
 }
 async function removeStockItem(id){
@@ -3455,6 +4114,8 @@ function renderInventory(){
           <td style="text-align:left;"><input id="estkName_${it.id}" value="${escapeHtml(it.name)}" style="padding:4px;" /></td>
           <td style="text-align:left;"><select id="estkGroup_${it.id}" style="padding:4px;">${allStockGroups().map(g=>`<option value="${escapeHtml(g)}" ${g===it.group?'selected':''}>${escapeHtml(g)}</option>`).join('')}</select></td>
           <td><select id="estkUnit_${it.id}" style="padding:4px;">${allStockUnits().map(u=>`<option value="${escapeHtml(u)}" ${u===it.unit?'selected':''}>${escapeHtml(u)}</option>`).join('')}</select></td>
+          <td><input id="estkHsn_${it.id}" value="${escapeHtml(it.hsn||'')}" style="padding:4px; width:80px;" /></td>
+          <td>${gstRateSelectHtml(it.gstRate, 'id="estkGst_' + it.id + '" style="padding:4px;"', true)}</td>
           <td><input id="estkQty_${it.id}" type="number" step="any" value="${it.openingQty||0}" style="padding:4px; width:90px;" /></td>
           <td><input id="estkRate_${it.id}" type="number" step="any" value="${it.openingRate||0}" style="padding:4px; width:90px;" /></td>
           <td></td>
@@ -3466,6 +4127,8 @@ function renderInventory(){
         <td style="text-align:left;"><b>${escapeHtml(it.name)}</b></td>
         <td style="text-align:left;">${escapeHtml(it.group||'-')}</td>
         <td>${escapeHtml(it.unit)}</td>
+        <td>${escapeHtml(it.hsn||'-')}</td>
+        <td>${it.gstRate === '' || it.gstRate === undefined ? '-' : it.gstRate + '%'}</td>
         <td style="font-family:monospace;">${fmtPlain(it.openingQty||0)}</td>
         <td style="font-family:monospace;">${fmtPlain(it.openingRate||0)}</td>
         <td style="font-family:monospace;">${fmtPlain(val)}</td>
@@ -3473,7 +4136,7 @@ function renderInventory(){
       </tr>`;
     }).join('');
     wrap.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr>
-      <th style="text-align:left;">Item</th><th style="text-align:left;">Group</th><th>Unit</th>
+      <th style="text-align:left;">Item</th><th style="text-align:left;">Group</th><th>Unit</th><th>HSN/SAC</th><th>GST</th>
       <th>Opening Qty</th><th>Opening Rate</th><th>Opening Value</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   renderStockGroupsList();
@@ -3816,6 +4479,7 @@ function renderAll(){
   if(document.getElementById('tab-groups').style.display !== 'none') renderGroupsTab();
   if(document.getElementById('tab-statement').style.display !== 'none') renderStatement();
   if(document.getElementById('tab-inventory').style.display !== 'none') renderInventory();
+  if(document.getElementById('tab-gst').style.display !== 'none') renderGst();
 }
 
 function buildBackupData(){
@@ -3832,7 +4496,7 @@ function buildBackupData(){
     vouchers, receipts, receiptCounter, voucherCounters,
     paymentHeads, assetHeads, liabilityHeads,
     openingBalances, assetOpeningBalances, liabilityOpeningBalances, ledgerOpeningBalances,
-    members, ledgerMaster, reconciledMap, openingBalanceDates, customGroups, activities, stockItems, stockUnits, boms, productions, stockGroups, trustGSTIN: trustDetails.gstin
+    members, ledgerMaster, reconciledMap, openingBalanceDates, customGroups, activities, stockItems, stockUnits, boms, productions, stockGroups, trustGSTIN: trustDetails.gstin, gstSettings
   };
 }
 
@@ -4000,6 +4664,7 @@ async function handleRestoreFile(event){
     stockItems = data.stockItems || []; await persistStockItems();
     stockUnits = data.stockUnits || []; await persistStockUnits();
     stockGroups = data.stockGroups || []; await persistStockGroups();
+    gstSettings = Object.assign(gstDefaults(), data.gstSettings || {}); await persistGstSettings();
     trustDetails.gstin = data.trustGSTIN || ''; await safeSet('trust-gstin', trustDetails.gstin); document.getElementById('trustGSTIN').value = trustDetails.gstin;
     boms = data.boms || []; await persistBoms();
     productions = data.productions || []; await persistProductions();
@@ -4294,7 +4959,7 @@ function initEntityUI(){
 }
 
 // ===================== Keyboard shortcuts (Tally jaisa) =====================
-const KB_TABS = { v:'voucher', t:'transactions', l:'ledger', g:'groups', s:'statement', a:'accounts', r:'receipts', i:'inventory', p:'report', c:'reconcile' };
+const KB_TABS = { v:'voucher', t:'transactions', l:'ledger', g:'groups', s:'statement', a:'accounts', r:'receipts', i:'inventory', x:'gst', p:'report', c:'reconcile' };
 const KB_VTYPES = { p:'payment', r:'receipt', c:'contra', j:'journal', s:'sales', u:'purchase', n:'credit_note', d:'debit_note' };
 let kbMenuMode = false, kbPillTimer = null;
 function kbIsTyping(el){
@@ -4353,7 +5018,7 @@ function kbToggleHelp(show){
       <div style="font-size:13px; color:#374151; line-height:1.9;">
         <b>Menu (jab cursor kisi khane me na ho):</b><br>
         <span class="kbd" style="float:none;">V</span> Voucher Entry &nbsp; <span class="kbd" style="float:none;">T</span> Transactions &nbsp; <span class="kbd" style="float:none;">L</span> Ledger by Head &nbsp; <span class="kbd" style="float:none;">G</span> Groups &nbsp; <span class="kbd" style="float:none;">S</span> Statement<br>
-        <span class="kbd" style="float:none;">A</span> Account Management &nbsp; <span class="kbd" style="float:none;">R</span> Receipts &nbsp; <span class="kbd" style="float:none;">I</span> Inventory &nbsp; <span class="kbd" style="float:none;">P</span> Report &nbsp; <span class="kbd" style="float:none;">C</span> Reconciliation<br>
+        <span class="kbd" style="float:none;">A</span> Account Management &nbsp; <span class="kbd" style="float:none;">R</span> Receipts &nbsp; <span class="kbd" style="float:none;">I</span> Inventory &nbsp; <span class="kbd" style="float:none;">X</span> GST &nbsp; <span class="kbd" style="float:none;">P</span> Report &nbsp; <span class="kbd" style="float:none;">C</span> Reconciliation<br>
         <b style="display:block; margin-top:8px;">Voucher Entry page par (type chunne ke liye):</b>
         <span class="kbd" style="float:none;">P</span> Payment &nbsp; <span class="kbd" style="float:none;">R</span> Receipt &nbsp; <span class="kbd" style="float:none;">C</span> Contra &nbsp; <span class="kbd" style="float:none;">J</span> Journal<br>
         <span class="kbd" style="float:none;">S</span> Sales &nbsp; <span class="kbd" style="float:none;">U</span> Purchase &nbsp; <span class="kbd" style="float:none;">N</span> Credit Note &nbsp; <span class="kbd" style="float:none;">D</span> Debit Note<br>
