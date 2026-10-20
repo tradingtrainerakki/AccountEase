@@ -1788,7 +1788,7 @@ function resetMultiForm(){
   if(keepGst){ resetVchGst(); vchGst.on = true; vchGst.plain = keepGst.plain; vchGst.trade = keepGst.trade; vchGst.invDate = document.getElementById('vch_date').value; vchLines = []; renderGstPanel(); }
   renderVoucherStockPanel(); renderMultiLines(); updatePreview();
 }
-function cancelMultiEdit(){ resetMultiForm(); }
+function cancelMultiEdit(){ resetMultiForm(); returnAfterEdit(); }
 async function saveMultiVoucher(makeReceipt){
   const type = document.getElementById('voucherType').value;
   const date = document.getElementById('vch_date').value || todayStr();
@@ -1863,8 +1863,10 @@ async function saveMultiVoucher(makeReceipt){
   resetMultiForm();
   renderAll();
   setStatus('✅ ' + VOUCHER_LABELS[type] + ' ' + vchNo + (wasEdit ? ' updated' : ' saved'));
+  if(wasEdit) returnAfterEdit();
 }
-function editMultiVoucher(id){
+function editMultiVoucher(id, ret){
+  EDIT_RETURN = ret || null;
   const v = vouchers.find(x=>x.id===id); if(!v || !isMulti(v)) return;
   const tabBtn = document.querySelector('.tab-btn[data-tab="voucher"]'); if(tabBtn) tabBtn.click();
   document.getElementById('voucherType').value = v.voucherType;
@@ -3134,7 +3136,7 @@ async function deleteVoucher(id){
 
 let editingVoucherId = null;
 function startEditVoucher(id){ editingVoucherId = id; renderTransactions(); }
-function cancelEditVoucher(){ editingVoucherId = null; renderTransactions(); }
+function cancelEditVoucher(){ editingVoucherId = null; renderTransactions(); if(document.getElementById('ledgerHeadSelect')) renderLedgerHeads(); }
 async function saveEditVoucher(id){
   const v = vouchers.find(x=>x.id===id);
   if(!v) return;
@@ -3159,6 +3161,7 @@ async function saveEditVoucher(id){
   await persistVouchers(); await persistReceipts();
   editingVoucherId = null;
   renderAll();
+  if(document.getElementById('ledgerHeadSelect')) renderLedgerHeads();
 }
 
 function openEditReceiptNameModal(receiptId){
@@ -3688,11 +3691,13 @@ function ledgerView(head, from, to){
   });
   return { openNet: r2(openNet), rows, totDr: r2(totDr), totCr: r2(totCr), closeNet: r2(openNet + totDr - totCr) };
 }
-function ledgerTallyHtml(head, from, to, showRunning){
+function ledgerTallyHtml(head, from, to, showRunning, withActions){
   const v = ledgerView(head, from, to);
   const dc = n => `<span class="tl-dc">${n >= 0 ? 'Dr' : 'Cr'}</span>`;
   const amt = n => fmtPlain(Math.abs(n));
-  const cols = showRunning ? 7 : 6;
+  const cols = (showRunning ? 7 : 6) + (withActions ? 1 : 0);
+  const canEdit = withActions && (typeof ROLE === 'undefined' || ROLE !== 'viewer');
+  const editShown = new Set();
   let run = v.openNet;
   const body = v.rows.map(e=>{
     run = r2(run + e.debit - e.credit);
@@ -3701,17 +3706,23 @@ function ledgerTallyHtml(head, from, to, showRunning){
       cp = '<div class="tl-cp">(As per details)</div>' + e.otherLines.map(l=>`<div class="tl-sub"><span>${escapeHtml(l.ledger)}</span><span>${l.amount != null ? fmtPlain(l.amount) : ''}</span></div>`).join('');
     } else cp = `<div class="tl-cp">${escapeHtml(e.other || '')}</div>`;
     const narr = [e.note, e.ref ? 'Ref: ' + e.ref : ''].filter(Boolean).join(' — ');
+    const vid = String(e.id).slice(0, -2), vch = vouchers.find(x=>x.id === vid);
+    if(withActions && vch && editingVoucherId === vid && !isMulti(vch) && !vch.gst && !vch.bill && !editShown.has(vid)){
+      editShown.add(vid);
+      return ledgerEditRowHtml(vch, cols);
+    }
+    const actionTd = withActions ? `<td style="white-space:nowrap;">${(canEdit && vch) ? `<button class="edit-btn" onclick="startEditFromLedger('${vid}')" title="${(isMulti(vch) || vch.gst || vch.bill) ? 'Voucher form me khulega; save ya cancel ke baad yahin wapas aayenge' : 'Yahin sudhaarein'}">Edit${(isMulti(vch) || vch.gst || vch.bill) ? ' ▸' : ''}</button>` : ''}</td>` : '';
     return `<tr><td style="white-space:nowrap;">${fmtDT(e.date)}</td>
       <td>${cp}${narr ? `<div class="tl-narr">${escapeHtml(narr)}</div>` : ''}</td>
       <td>${escapeHtml(VOUCHER_LABELS[e.vchType] ? VOUCHER_LABELS[e.vchType].replace(/ —.*$/, '') : (e.vchType || ''))}</td>
       <td style="white-space:nowrap;">${escapeHtml(e.voucherNo || '')}</td>
       <td class="amt">${e.debit ? fmtPlain(e.debit) : ''}</td><td class="amt">${e.credit ? fmtPlain(e.credit) : ''}</td>
-      ${showRunning ? `<td class="amt">${Math.abs(run) < 0.005 ? '0.00' : amt(run) + dc(run)}</td>` : ''}</tr>`;
+      ${showRunning ? `<td class="amt">${Math.abs(run) < 0.005 ? '0.00' : amt(run) + dc(run)}</td>` : ''}${actionTd}</tr>`;
   }).join('');
   const openDr = v.openNet > 0 ? v.openNet : 0, openCr = v.openNet < 0 ? -v.openNet : 0;
   const closeDr = v.closeNet < 0 ? -v.closeNet : 0, closeCr = v.closeNet > 0 ? v.closeNet : 0;
   const grandDr = r2(openDr + v.totDr + closeDr), grandCr = r2(openCr + v.totCr + closeCr);
-  const empty = `<td></td>`.repeat(showRunning ? 1 : 0);
+  const empty = `<td></td>`.repeat((showRunning ? 1 : 0) + (withActions ? 1 : 0));
   const openRow = Math.abs(v.openNet) > 0.004
     ? `<tr class="tl-open"><td></td><td>Opening Balance${dc(v.openNet)}</td><td></td><td></td><td class="amt">${openDr ? fmtPlain(openDr) : ''}</td><td class="amt">${openCr ? fmtPlain(openCr) : ''}</td>${empty}</tr>` : '';
   const curRow = `<tr class="tl-cur"><td></td><td>Current Total</td><td></td><td></td><td class="amt">${fmtPlain(v.totDr)}</td><td class="amt">${fmtPlain(v.totCr)}</td>${empty}</tr>`;
@@ -3725,9 +3736,45 @@ function ledgerTallyHtml(head, from, to, showRunning){
       <div class="tl-meta">${grp ? 'Group: ' + escapeHtml(grp) + ' &nbsp;|&nbsp; ' : ''}Period: ${period}</div>
     </div>
     <div style="overflow-x:auto;"><table class="tl-table">
-      <thead><tr><th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No.</th><th class="r">Debit</th><th class="r">Credit</th>${showRunning ? '<th class="r">Balance</th>' : ''}</tr></thead>
+      <thead><tr><th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No.</th><th class="r">Debit</th><th class="r">Credit</th>${showRunning ? '<th class="r">Balance</th>' : ''}${withActions ? '<th></th>' : ''}</tr></thead>
       <tbody>${openRow}${body || `<tr><td colspan="${cols}" style="text-align:center; color:#9ca3af;">Is avadhi me koi entry nahi</td></tr>`}${curRow}${closeRow}${totRow}</tbody>
     </table></div>`;
+}
+// ===================== Ledger se seedha Edit =====================
+let EDIT_RETURN = null;
+function ledgerEditRowHtml(v, cols){
+  const id = v.id, locked = (v.stockLines && v.stockLines.length);
+  const lab = (t, inner)=> `<label style="font-size:11px; color:#6b7280; display:flex; flex-direction:column; gap:2px;">${t}${inner}</label>`;
+  return `<tr style="background:#fffbea;"><td colspan="${cols}" style="padding:10px;">
+    <div style="font-size:12px; margin-bottom:6px;"><span class="tag vch">${escapeHtml(v.voucherNo)}</span> ${escapeHtml(VOUCHER_LABELS[v.voucherType] || v.voucherType)} — yahin badlein</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      ${lab('Date', `<input id="editVchDate_${id}" type="date" value="${v.date}" style="padding:5px;" />`)}
+      ${lab('Dr ledger', `<input id="editVchDr_${id}" list="allLedgerNamesDatalist" value="${escapeHtml(v.drLedger)}" style="padding:5px; width:170px;" />`)}
+      ${lab('Cr ledger', `<input id="editVchCr_${id}" list="allLedgerNamesDatalist" value="${escapeHtml(v.crLedger)}" style="padding:5px; width:170px;" />`)}
+      ${lab('Raqam (₹)', `<input id="editVchAmount_${id}" type="number" step="any" value="${v.amount}" ${locked ? 'disabled title="Stock wale voucher ki raqam Qty x Rate se bani hai"' : ''} style="padding:5px; width:110px; text-align:right;" />`)}
+      ${lab('Ref', `<input id="editVchRef_${id}" value="${escapeHtml(v.ref || '')}" style="padding:5px; width:110px;" />`)}
+      ${lab('Narration', `<input id="editVchNote_${id}" value="${escapeHtml(v.note || '')}" style="padding:5px; width:200px;" />`)}
+      ${lab('Activity', `<select id="editVchActivity_${id}" style="padding:5px; width:150px;"><option value="">-- No activity --</option>${getAllActivityNames().map(a=>`<option value="${escapeHtml(a)}" ${a === v.activity ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('')}</select>`)}
+      <button class="btn-secondary btn-small" style="background:#0f6e4e; color:#fff;" onclick="saveEditVoucher('${id}')">Save</button>
+      <button class="delete-btn" onclick="cancelEditVoucher()">Cancel</button>
+    </div></td></tr>`;
+}
+function startEditFromLedger(vid){
+  const v = vouchers.find(x=>x.id === vid); if(!v) return;
+  const sel = document.getElementById('ledgerHeadSelect');
+  if(isMulti(v) || v.gst || v.bill){ editMultiVoucher(vid, { tab:'ledger', ledger: sel ? sel.value : '' }); return; }
+  editingVoucherId = vid; renderLedgerDetail();
+}
+function returnAfterEdit(){
+  if(!EDIT_RETURN) return;
+  const r = EDIT_RETURN; EDIT_RETURN = null;
+  const nb = document.querySelector('nav button[data-tab="' + r.tab + '"]'); if(nb) nb.click();
+  if(r.tab === 'ledger' && r.ledger){
+    const sel = document.getElementById('ledgerHeadSelect');
+    if(sel && ![...sel.options].some(o=>o.value === r.ledger)){ const o = document.createElement('option'); o.value = r.ledger; o.textContent = r.ledger; sel.appendChild(o); }
+    if(sel) sel.value = r.ledger;
+    renderLedgerDetail();
+  }
 }
 function setLedgerRange(kind){
   const now = new Date(); let from = '', to = '';
@@ -3753,7 +3800,7 @@ function renderLedgerDetail(){
   const head = document.getElementById('ledgerHeadSelect').value;
   const wrap = document.getElementById('ledgerDetailWrap');
   if(!head){ wrap.innerHTML = ''; return; }
-  wrap.innerHTML = ledgerTallyHtml(head, document.getElementById('ledFrom').value, document.getElementById('ledTo').value, document.getElementById('ledRunning').checked);
+  wrap.innerHTML = ledgerTallyHtml(head, document.getElementById('ledFrom').value, document.getElementById('ledTo').value, document.getElementById('ledRunning').checked, true);
 }
 function printLedger(){
   const head = document.getElementById('ledgerHeadSelect').value;
