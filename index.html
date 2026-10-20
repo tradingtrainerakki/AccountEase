@@ -210,6 +210,11 @@
   .tl-table tr.tl-total td{font-weight:800; border-top:2px solid #0f6e4e; border-bottom:none; background:#f0fdf4;}
   .bs-link{cursor:pointer; color:inherit; border-bottom:1px dotted #94a3b8;}
   .bs-link:hover{color:#0f6e4e; border-bottom-color:#0f6e4e;}
+  tr.kb-sel > td{ background:#ecfdf5 !important; box-shadow:inset 0 2px 0 #0f6e4e, inset 0 -2px 0 #0f6e4e; }
+  tr.kb-sel > td:first-child{ box-shadow:inset 2px 2px 0 #0f6e4e, inset 0 -2px 0 #0f6e4e; }
+  tr.kb-sel > td:last-child{ box-shadow:inset -2px 2px 0 #0f6e4e, inset 0 -2px 0 #0f6e4e; }
+  .kb-rowhint{ font-size:11.5px; color:var(--muted); margin:0 0 8px; }
+  @media (max-width: 899px){ .kb-rowhint{ display:none; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.79.0/dist/umd/supabase.js"></script>
@@ -455,6 +460,7 @@
           </select>
         </label>
       </div>
+      <div class="kb-rowhint">⌨️ <b>↑ ↓</b> se voucher chunein · <b>E</b> ya <b>Enter</b> se edit · edit me <b>Enter</b> = Save, <b>Esc</b> = Cancel</div>
       <div id="transactionsTableWrap"></div>
     </div>
   </div>
@@ -474,6 +480,7 @@
         <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-left:8px;"><input type="checkbox" id="ledRunning" onchange="renderLedgerDetail()" /> Running balance dikhayein</label>
         <button class="btn-secondary btn-small" style="margin-left:auto;" onclick="printLedger()">🖨️ Print Ledger</button>
       </div>
+      <div class="kb-rowhint">⌨️ <b>↑ ↓</b> se entry chunein · <b>E</b> ya <b>Enter</b> se edit · edit me <b>Enter</b> = Save, <b>Esc</b> = Cancel</div>
       <div id="ledgerDetailWrap"></div>
     </div>
   </div>
@@ -3575,7 +3582,7 @@ function renderTransactions(){
     const stkTag = (v.stockLines && v.stockLines.length) ? `<br><span class="tag custom" title="${escapeHtml(v.stockLines.map(l=>{const it=stockItems.find(x=>x.id===l.itemId); return (it?it.name:'(deleted item)')+' '+l.qty+' x '+l.rate;}).join(' | '))}">📦 ${v.stockLines.length} item</span>` : '';
     const actTag = v.activity ? `<br><span class="tag custom">🎯 ${escapeHtml(v.activity)}</span>` : '';
     const receiptNameTag = (v.voucherType === 'receipt' && v.receiptName) ? `<br><span class="tag name">📝 ${escapeHtml(v.receiptName)}</span>` : '';
-    return `<tr class="${cancelledClass}">
+    return `<tr class="${cancelledClass}" data-vid="${v.id}">
       <td class="actions-cell">${v.date}</td>
       <td class="actions-cell"><span class="tag vch">${escapeHtml(v.voucherNo)}</span><br><span style="font-size:11px; color:var(--muted);">${VOUCHER_LABELS[v.voucherType]||v.voucherType}</span>${multiTag}${billTagHtml}</td>
       <td style="text-align:left; background:#fef3f2;">${isM ? lineHtml('Dr') : '<b>Dr:</b> ' + escapeHtml(v.drLedger)}</td>
@@ -3594,6 +3601,7 @@ function renderTransactions(){
       <th style="background:#dcfce7; color:#166534;">Credit (₹)</th>
       <th style="text-align:left;">Status</th><th style="text-align:left;">Actions</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
+  kbReapplyRow();
 }
 
 function renderReceipts(){
@@ -3712,7 +3720,7 @@ function ledgerTallyHtml(head, from, to, showRunning, withActions){
       return ledgerEditRowHtml(vch, cols);
     }
     const actionTd = withActions ? `<td style="white-space:nowrap;">${(canEdit && vch) ? `<button class="edit-btn" onclick="startEditFromLedger('${vid}')" title="${(isMulti(vch) || vch.gst || vch.bill) ? 'Voucher form me khulega; save ya cancel ke baad yahin wapas aayenge' : 'Yahin sudhaarein'}">Edit${(isMulti(vch) || vch.gst || vch.bill) ? ' ▸' : ''}</button>` : ''}</td>` : '';
-    return `<tr><td style="white-space:nowrap;">${fmtDT(e.date)}</td>
+    return `<tr${(withActions && vch) ? ` data-vid="${vid}"` : ''}><td style="white-space:nowrap;">${fmtDT(e.date)}</td>
       <td>${cp}${narr ? `<div class="tl-narr">${escapeHtml(narr)}</div>` : ''}</td>
       <td>${escapeHtml(VOUCHER_LABELS[e.vchType] ? VOUCHER_LABELS[e.vchType].replace(/ —.*$/, '') : (e.vchType || ''))}</td>
       <td style="white-space:nowrap;">${escapeHtml(e.voucherNo || '')}</td>
@@ -3801,6 +3809,7 @@ function renderLedgerDetail(){
   const wrap = document.getElementById('ledgerDetailWrap');
   if(!head){ wrap.innerHTML = ''; return; }
   wrap.innerHTML = ledgerTallyHtml(head, document.getElementById('ledFrom').value, document.getElementById('ledTo').value, document.getElementById('ledRunning').checked, true);
+  kbReapplyRow();
 }
 function printLedger(){
   const head = document.getElementById('ledgerHeadSelect').value;
@@ -5520,6 +5529,8 @@ function kbToggleHelp(show){
         <b style="display:block; margin-top:8px;">Voucher bharte samay:</b>
         <span class="kbd" style="float:none;">Enter</span> agla khana &nbsp; <span class="kbd" style="float:none;">Ctrl</span>+<span class="kbd" style="float:none;">S</span> Save<br>
         <span class="kbd" style="float:none;">Esc</span> khane se bahar aana. Voucher page par, khane se bahar Esc dabane se <b>Menu mode</b> (phir V/T/L... se dusre page par jayein).<br>
+        <b style="display:block; margin-top:8px;">Ledger by Head / Transactions me:</b>
+        <span class="kbd" style="float:none;">↑</span> <span class="kbd" style="float:none;">↓</span> entry chunein &nbsp; <span class="kbd" style="float:none;">E</span> / <span class="kbd" style="float:none;">Enter</span> edit &nbsp; (edit me <span class="kbd" style="float:none;">Enter</span> Save, <span class="kbd" style="float:none;">Esc</span> Cancel)<br>
         <span class="kbd" style="float:none;">?</span> yeh list
       </div>
       <div style="text-align:right; margin-top:12px;"><button class="btn-secondary btn-small" onclick="kbToggleHelp(false)">Band karein (Esc)</button></div></div>`;
@@ -5562,6 +5573,66 @@ document.addEventListener('keydown', async (e)=>{
   }
   if(KB_TABS[k]){ e.preventDefault(); kbGoTab(KB_TABS[k]); if(KB_TABS[k] === 'voucher'){ kbPill('⌨️ Voucher type chunein: P R C J S U N D', 4000); } }
 });
+// ===================== Keyboard: row chunna aur edit =====================
+let KB_ROW = null;   // { vid }
+function kbRowTab(){ const t = kbCurrentTab(); return (t === 'ledger' || t === 'transactions') ? t : ''; }
+function kbRowList(){
+  const t = kbRowTab(); if(!t) return [];
+  const wrap = document.getElementById(t === 'ledger' ? 'ledgerDetailWrap' : 'transactionsTableWrap');
+  return wrap ? [...wrap.querySelectorAll('tr[data-vid]')] : [];
+}
+function kbSetRow(tr, scroll){
+  document.querySelectorAll('tr.kb-sel').forEach(x=>x.classList.remove('kb-sel'));
+  if(!tr){ KB_ROW = null; return; }
+  tr.classList.add('kb-sel'); KB_ROW = { vid: tr.dataset.vid };
+  if(scroll && tr.scrollIntoView) tr.scrollIntoView({ block:'nearest' });
+}
+function kbReapplyRow(){
+  if(!KB_ROW) return;
+  const tr = kbRowList().find(x=>x.dataset.vid === KB_ROW.vid);
+  if(tr) tr.classList.add('kb-sel'); else if(!vouchers.some(v=>v.id === KB_ROW.vid)) KB_ROW = null;
+}
+function kbMoveRow(delta){
+  const list = kbRowList(); if(!list.length) return false;
+  let i = KB_ROW ? list.findIndex(x=>x.dataset.vid === KB_ROW.vid) : -1;
+  if(i < 0) i = delta > 0 ? 0 : list.length - 1;
+  else i = Math.max(0, Math.min(list.length - 1, i + delta));
+  kbSetRow(list[i], true);
+  return true;
+}
+function kbEditSelected(){
+  if(!KB_ROW) return false;
+  const v = vouchers.find(x=>x.id === KB_ROW.vid); if(!v) return false;
+  if(ROLE === 'viewer'){ toast('👁️ Viewer edit nahi kar sakta'); return true; }
+  if(kbRowTab() === 'ledger') startEditFromLedger(v.id);
+  else if(isMulti(v) || v.gst || v.bill) editMultiVoucher(v.id);
+  else startEditVoucher(v.id);
+  return true;
+}
+document.addEventListener('click', (e)=>{
+  const tr = e.target.closest && e.target.closest('tr[data-vid]');
+  if(tr && kbRowTab()) kbSetRow(tr, false);
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if(typeof kbOverlayOpen === 'function' && kbOverlayOpen()) return;
+  const target = e.target, key = e.key;
+  // inline edit row: Enter = Save, Esc = Cancel
+  const m = target && target.id && target.id.match(/^editVch(Date|Dr|Cr|Amount|Ref|Note|Activity)_(.+)$/);
+  if(m){
+    if(key === 'Enter'){ e.preventDefault(); e.stopImmediatePropagation(); saveEditVoucher(m[2]); }
+    else if(key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); cancelEditVoucher(); }
+    return;
+  }
+  if(!kbRowTab() || kbIsTyping(target)) return;
+  if(key === 'ArrowDown' || key === 'ArrowUp'){ if(kbMoveRow(key === 'ArrowDown' ? 1 : -1)){ e.preventDefault(); e.stopImmediatePropagation(); } return; }
+  if(key === 'Home' || key === 'End'){ const l = kbRowList(); if(l.length){ kbSetRow(key === 'Home' ? l[0] : l[l.length - 1], true); e.preventDefault(); e.stopImmediatePropagation(); } return; }
+  const interactive = target && target.closest && target.closest('button, a');
+  if((key === 'e' || key === 'E') || (key === 'Enter' && !interactive)){
+    if(kbEditSelected()){ e.preventDefault(); e.stopImmediatePropagation(); }
+  }
+}, true);
+
 (function initKeyboardUI(){
   const pill = document.createElement('div'); pill.id = 'kbdPill'; document.body.appendChild(pill);
   const letterOf = {}; Object.keys(KB_TABS).forEach(k=> letterOf[KB_TABS[k]] = k.toUpperCase());
